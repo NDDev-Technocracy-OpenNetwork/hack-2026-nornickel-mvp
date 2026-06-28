@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 55e8e19 docs: integrate evidence-led mvp review
+Last commit: 5acab4a docs: lock implementation decisions
 Scope: README.md; .serena/newproj/nornikel-kg-search/
 Area: DOCS
 -->
@@ -23,6 +23,7 @@ Capture how to use and maintain the planning package before implementation scaff
 - `.serena/newproj/nornikel-kg-search/10_TESTING.md`: evaluation plan.
 - `.serena/newproj/nornikel-kg-search/17_GPT_55_PRO_REVIEW_PROMPT.md`: prompt for external model review.
 - `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md`: scaffold authority.
+- `.serena/newproj/nornikel-kg-search/19_OWNER_DECISIONS.md`: closed owner decisions for implementation.
 
 ## Entry Points
 
@@ -31,7 +32,7 @@ Capture how to use and maintain the planning package before implementation scaff
 
 ## Current Behavior
 
-The planning package intentionally favors MVP-lite: DuckDB, Qdrant, NetworkX, Docling, FastAPI, Streamlit, artifact memory bank, stable EvidenceSpans, table-first extraction, claim verification, and evaluation/security dashboard.
+The planning package now favors a server-first product MVP: React/Vite frontend, FastAPI backend, DuckDB, Qdrant, NetworkX, Docling, LiteLLM/OpenAI-compatible providers, artifact memory bank, stable EvidenceSpans, table-first extraction, claim verification, and evaluation/security dashboard.
 
 ## Contracts And Data
 
@@ -39,7 +40,7 @@ Repository artifacts are written in English. User-facing conversation remains Ru
 
 ## Invariants
 
-- Do not commit internal corpora, generated artifact memory bank files, local Qdrant storage, DuckDB runtime databases, caches, or secrets.
+- Synthetic fixtures should be committed. Real internal corpora may be committed only when owner-provided/approved for this private repository. Generated artifact memory bank files, local Qdrant storage, DuckDB runtime databases, caches, and secrets must not be committed.
 - Planning docs should not claim implemented behavior before scaffold code exists.
 - If a planning document conflicts with `18_IMPLEMENTATION_SPEC.md`, P0 implementation follows `18_IMPLEMENTATION_SPEC.md`.
 
@@ -51,4 +52,3 @@ Keep planning updates source-backed when they mention external tools or current 
 
 - `git diff --check`: formatting.
 - Targeted `rg` scans: consistency and accidental secret markers.
-

@@ -127,7 +127,7 @@
   "verification": {
     "citation_coverage": 1.0,
     "unsupported_claim_count": 0,
-    "acl_leak_count": 0
+    "source_label_leak_count": 0
   },
   "conflicts": [],
   "gaps": [
@@ -143,6 +143,6 @@
 ## Error Rules
 
 - Ambiguous material or property returns `409` with candidate entities.
-- Forbidden source access returns `403`; the answer must omit restricted evidence.
+- Disallowed source-label access returns `403` when a policy is active; otherwise the answer must omit disallowed evidence.
 - Missing evidence returns `200` with empty evidence and explicit gaps, not a hallucinated answer.
 - Generated sentences without support IDs are rejected before the final response is returned.

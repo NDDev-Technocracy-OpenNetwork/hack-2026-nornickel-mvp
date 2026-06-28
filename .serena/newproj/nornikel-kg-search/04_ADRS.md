@@ -91,13 +91,19 @@ Rationale:
 
 Status: Proposed
 
-Decision: LLM extraction and answer generation must be behind provider interfaces.
+Decision: LLM extraction, answer generation, and embeddings must be behind provider interfaces. Use LiteLLM/OpenAI-compatible external APIs for P0, configured only through environment variables and server secrets.
 
 Rationale:
 
-- Internal document policy may require local/on-prem models.
-- Hosted providers may be allowed only for anonymized or public data.
+- The owner approved external API use for this hackathon.
+- LiteLLM keeps model/provider changes out of domain code.
+- Local/on-prem models can still be added later through the same ports.
 - Evaluation and provenance should not depend on one vendor.
+
+Consequences:
+
+- `gpt-5.5-mini` is treated as an owner-provided LiteLLM alias until the exact provider model ID is verified in the deployment account.
+- Official OpenAI docs currently confirm `gpt-5.5` availability and OpenAI embedding models such as `text-embedding-3-large`; deployment must keep model names configurable.
 
 ## ADR-007: Provenance Is Mandatory
 
@@ -109,3 +115,38 @@ Rationale:
 
 - Scientific users need evidence and reproducibility.
 - Provenance enables conflict detection, trust scoring, and audit.
+
+## ADR-008: Use React/Vite For P0 Workbench
+
+Status: Proposed
+
+Decision: Use React 19, Vite 8, TypeScript, and a graph/table-oriented UI stack for the P0 workbench instead of Streamlit.
+
+Rationale:
+
+- The owner prioritized a polished, visually strong product on the server over fastest local prototyping.
+- Vite 8 supports the current React template and requires Node 20.19+ or 22.12+; use Node 24 LTS for the server baseline.
+- React gives better graph exploration, evidence cards, dense tables, and security/evaluation dashboards than a Python-only workbench.
+
+Consequences:
+
+- FastAPI is required from the first scaffold.
+- Browser validation becomes mandatory for UI changes.
+- Streamlit is no longer part of P0.
+
+## ADR-009: Use Python 3.12 And Server-First Docker Compose
+
+Status: Proposed
+
+Decision: Use Python 3.12 for backend/scientific tooling and Docker Compose deployment to `fa.nddev.asia` via `ssh server-nddev`.
+
+Rationale:
+
+- Python 3.12 is current enough while reducing compatibility risk for Docling, OCR, scientific parsing, and binary dependencies.
+- The owner confirmed the project will run on a server, not as a local-only demo.
+- Docker Compose gives repeatable API/frontend/Qdrant/runtime volume orchestration without prematurely adding Kubernetes or queues.
+
+Consequences:
+
+- CI must validate both backend and frontend.
+- Deployment configuration must use `.env.example` placeholders and server-side secrets, not committed keys.

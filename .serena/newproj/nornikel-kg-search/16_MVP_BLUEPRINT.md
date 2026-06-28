@@ -21,12 +21,14 @@ Upload/import source files
 -> show missing data/gap
 ```
 
-## MVP-Lite Architecture
+## P0 Architecture
 
 ```text
-Streamlit Workbench
+React/Vite Workbench
         |
-FastAPI / Application Services
+FastAPI API
+        |
+Application Services
         |
 Domain Ports
         |
@@ -43,19 +45,19 @@ Docling artifacts + extraction pipeline + QA/evaluation
 DuckDB is the P0 system of record.
 
 - The artifact memory bank stores raw files and parser outputs.
-- DuckDB stores source registry, ingestion runs, artifact metadata, evidence spans, dictionaries, normalized facts, graph node/edge tables, answer claims, evaluation results, and ACL decisions.
+- DuckDB stores source registry, ingestion runs, artifact metadata, evidence spans, dictionaries, normalized facts, graph node/edge tables, answer claims, evaluation results, and source security-label decisions.
 - Qdrant retrieves candidate evidence units only; it is never authoritative for facts or provenance.
 - NetworkX materializes graph paths from DuckDB node/edge tables on demand; it is not persistent graph state.
-- Streamlit is the workbench; it must call application services and not perform long-running ingestion inside page reruns.
+- React/Vite is the workbench; it must call FastAPI and never bypass application services.
 
 If DuckDB and Qdrant disagree, DuckDB wins.
 
 ## Why This Is The Right MVP Shape
 
-- It is buildable quickly: one Python stack plus Qdrant.
+- It is buildable as a real product slice: Python backend, React frontend, Qdrant, and Docker Compose.
 - It is modular: domain code depends on ports, not vendor clients.
-- It is scalable later: DuckDB to PostgreSQL, NetworkX to Neo4j, Streamlit to React.
-- It is demo-friendly: Streamlit gives upload, tables, filters, charts, and graph previews fast.
+- It is scalable later: DuckDB to PostgreSQL, NetworkX to Neo4j, in-process jobs to queues, local artifacts to object storage.
+- It is demo-friendly: React can provide a polished graph/evidence experience on `fa.nddev.asia`.
 - It keeps the core trust feature: every claim maps to an `EvidenceSpan`.
 
 ## P0 Modules
@@ -150,7 +152,19 @@ Owns proof:
 - Recall@10;
 - citation coverage;
 - unsupported claim count;
-- ACL leak checks.
+- source-label leak checks.
+
+### `frontend`
+
+Owns the server-facing product UI:
+
+- import/status page;
+- artifact bank;
+- extraction workbench;
+- ask/analysis page;
+- graph path and neighborhood visualization;
+- evidence cards;
+- evaluation/security dashboard.
 
 ## P0 Screens
 
@@ -182,7 +196,7 @@ Owns proof:
 ### Evaluation
 
 - run demo questions;
-- show Recall@10, citation coverage, unsupported claim count, ACL leaks, and prompt-injection fixture status.
+- show Recall@10, citation coverage, unsupported claim count, source-label leaks, and prompt-injection fixture status.
 
 ## P0 ID Policy
 
@@ -255,14 +269,15 @@ Final answer output must be claim-led:
 9. Qdrant index and hybrid retrieval.
 10. NetworkX graph adapter from DuckDB node/edge tables.
 11. QA answer assembler and claim verifier.
-12. Streamlit workbench.
-13. Evaluation/security dashboard.
+12. FastAPI endpoints.
+13. React/Vite workbench.
+14. Evaluation/security dashboard.
+15. Server deployment to `fa.nddev.asia`.
 
 ## Deferral List
 
 Do not build before P0 works:
 
-- React frontend;
 - Neo4j persistence;
 - PostgreSQL;
 - worker queues;
@@ -274,7 +289,8 @@ Do not build before P0 works:
 ## Success Criteria
 
 - Demo corpus imports from a clean checkout.
-- At least 10 demo questions run end to end.
+- One ideal demo scenario runs end to end with a polished UI.
+- Gold/adversarial fixtures still run through evaluation for regression proof.
 - 100% final answer claims cite `EvidenceSpan`.
 - At least 80% Recall@10 on demo QA evidence.
 - Zero inaccessible evidence in answer context.
@@ -286,7 +302,6 @@ When the demo works:
 
 - promote DuckDB to PostgreSQL for multi-user review and audit;
 - promote NetworkX to Neo4j for persistent graph queries and Cypher;
-- promote Streamlit to React for polished UX;
 - promote in-process jobs to queue workers;
 - promote local artifacts to S3-compatible object storage;
 - add domain NLP and review workflow.

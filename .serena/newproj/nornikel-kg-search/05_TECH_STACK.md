@@ -1,11 +1,13 @@
 # Tech Stack
 
-## Recommended MVP-Lite Stack
+## Recommended P0 Stack
 
 | Layer | Choice | Reason |
 | --- | --- | --- |
-| App Shell | Streamlit | Fastest useful workbench for upload, search, evidence tables, gap matrix, and graph preview |
-| Backend API | FastAPI, Pydantic | Typed contracts, OpenAPI, and clean path to replace Streamlit calls with a real frontend |
+| Frontend | React 19, Vite 8, TypeScript | Polished graph/evidence workbench, production-like UX, and simple static deployment |
+| UI/Graph | React Flow or Cytoscape.js, TanStack Table, shadcn/ui-style primitives | Rich answer-path visualization, dense evidence tables, and maintainable components |
+| Backend API | FastAPI, Pydantic | Typed contracts, OpenAPI, async endpoints, and Python-native ingestion/QA services |
+| Runtime | Python 3.12, Node 24 LTS | Stable compatibility for Docling/OCR/scientific Python while meeting current Vite Node requirements |
 | App/Analytics DB | DuckDB | Embedded persistence for source registry, artifacts, extracted facts, and gap analytics |
 | Graph Adapter | NetworkX first | In-memory typed graph paths and node-link export without Neo4j setup cost |
 | Vector Search | Qdrant local/Docker | Dense plus sparse hybrid retrieval, payload filters, and production-compatible API |
@@ -14,10 +16,10 @@
 | Parse QA Alternatives | Unstructured, Marker, MinerU | Compare on hard PDFs, scanned images, tables, formulas |
 | Workers | Synchronous job runner first | Simpler MVP; promote to queue when ingestion becomes long-running |
 | Object Storage | Local artifact directory | Original files, Markdown, structured JSON, tables, images, manifests |
-| Graph UI | Streamlit component or embedded HTML | Controlled answer-path graph preview without full frontend build |
-| Tables | Streamlit dataframes | Evidence and experiment comparison in the first demo |
-| Auth MVP | Local users or reverse-proxy stub | Replaceable with corporate SSO |
-| Deployment | Local Python app plus optional Docker Compose | Fast local demo; Qdrant can run in Docker |
+| Auth MVP | No user auth; source security labels only | Owner confirmed open demo access; keep security/provenance labels for future RBAC |
+| LLM Gateway | LiteLLM Python SDK first | Provider/model can be changed through env without rewriting domain code |
+| Embeddings | LiteLLM/OpenAI-compatible embeddings first, local fallback later | External APIs are allowed; keep provider behind `EmbeddingModelPort` |
+| Deployment | Docker Compose on `fa.nddev.asia` | Server-first demo with API, frontend, Qdrant, and persisted local artifacts |
 | Observability | Structured logs, OpenTelemetry-ready IDs | Trace ingestion and answer provenance |
 
 ## P1/Productization Adapters
@@ -26,10 +28,10 @@
 | --- | --- | --- |
 | MetadataStore | DuckDB | PostgreSQL |
 | GraphStore | NetworkX over typed facts | Neo4j |
-| WorkbenchUI | Streamlit | React + Cytoscape/React Flow |
+| WorkbenchUI | React + Vite | Same stack, richer design system and production routing |
 | JobRunner | In-process runner | Celery/RQ/Arq worker queue |
 | ArtifactStore | Local filesystem | S3-compatible object storage |
-| AuthProvider | Local/dev stub | Corporate SSO/RBAC |
+| AuthProvider | Disabled/demo-open with labels | Corporate SSO/RBAC |
 
 ## Retrieval Tooling
 
@@ -110,12 +112,21 @@ Use relationship types:
 
 ## LLM And Embeddings
 
-Keep providers configurable:
+Keep providers configurable through `.env` and never commit real keys:
 
 - extraction model;
 - answer model;
 - embedding model;
 - reranker.
+
+P0 defaults:
+
+- `LLM_PROVIDER=litellm`;
+- `LLM_MODEL=openai/gpt-5.5-mini` as an owner-provided LiteLLM model alias;
+- `EMBEDDING_PROVIDER=litellm`;
+- `EMBEDDING_MODEL=openai/text-embedding-3-large` or another OpenAI-compatible embedding model;
+- `LITELLM_API_BASE` optional for a proxy or OpenAI-compatible gateway;
+- `OPENAI_API_KEY` or provider-specific key supplied only through server secrets.
 
 Hard requirements:
 

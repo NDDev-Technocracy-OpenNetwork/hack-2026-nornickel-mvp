@@ -36,7 +36,7 @@
 
 - Return structured errors.
 - Return reproducibility IDs for QA and ingestion runs.
-- Do permission filtering before answer generation.
+- Do source-label filtering before answer generation.
 - Include validation status in evidence records.
 
 ## UI Rules

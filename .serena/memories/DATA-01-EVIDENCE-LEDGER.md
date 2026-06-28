@@ -1,7 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 55e8e19 docs: integrate evidence-led mvp review
-Scope: .serena/newproj/nornikel-kg-search/06_API.md; .serena/newproj/nornikel-kg-search/07_DATA.md; .serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md
+Last commit: 5acab4a docs: lock implementation decisions
+Scope: .serena/newproj/nornikel-kg-search/06_API.md; .serena/newproj/nornikel-kg-search/07_DATA.md; .serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md; .serena/newproj/nornikel-kg-search/19_OWNER_DECISIONS.md
 Area: DATA
 -->
 
@@ -16,6 +16,7 @@ Capture evidence identity, artifact memory, scientific schemas, and answer-claim
 - `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md`: ID policy, artifact layout, minimum DuckDB tables, and required schemas.
 - `.serena/newproj/nornikel-kg-search/07_DATA.md`: domain model and graph path.
 - `.serena/newproj/nornikel-kg-search/06_API.md`: API-level answer and graph response contracts.
+- `.serena/newproj/nornikel-kg-search/19_OWNER_DECISIONS.md`: demo scope and fixture/corpus decisions.
 
 ## Entry Points
 
@@ -26,7 +27,7 @@ Capture evidence identity, artifact memory, scientific schemas, and answer-claim
 
 ## Current Behavior
 
-The planned source of truth is a DuckDB scientific evidence ledger. The artifact bank stores raw files and parser outputs; DuckDB stores source registry, ingestion runs, artifacts, evidence spans, table rows/cells, normalized facts, graph node/edge tables, answer claims, evaluation results, and ACL decisions.
+The planned source of truth is a DuckDB scientific evidence ledger. The artifact bank stores raw files and parser outputs; DuckDB stores source registry, ingestion runs, artifacts, evidence spans, table rows/cells, normalized facts, graph node/edge tables, answer claims, evaluation results, and source security-label decisions.
 
 ## Contracts And Data
 
@@ -35,6 +36,8 @@ Separate IDs are required: `source_id`, `artifact_id`, `span_id`, `extraction_ru
 Table rows and table cells are first-class evidence units. `EffectClaim` is required for "what effect" answers and must reference baseline/treated measurements or be marked qualitative-only.
 
 The canonical graph path uses expanded materials-science context: `Experiment -> Sample -> Material`, `Experiment -> ProcessingRegime -> ProcessStep`, `Experiment -> PropertyMeasurement -> Property`, and `PropertyMeasurement -> EvidenceSpan -> Document`. `EffectClaim` links baseline and treated measurements.
+
+P0 demo dictionaries cover Ni-Cu, Cu-Ni, and Ni-Cr-Mo alloys; annealing, aging, cold rolling, solution treatment/quench, welding/cladding; and hardness, tensile strength, elongation, conductivity, corrosion rate, grain size, porosity/cracking, and phase fraction.
 
 ## Invariants
 
@@ -51,5 +54,4 @@ Freeze ID generation before writing ingestion code. Add migrations and domain te
 ## Verification
 
 - Future `make test`: must include ID stability, evidence span, unit normalization, and answer claim verifier tests.
-- Future `make eval`: must report citation coverage, unsupported claim count, table-row recall, and ACL leak count.
-
+- Future `make eval`: must report citation coverage, unsupported claim count, table-row recall, and source-label leak count.

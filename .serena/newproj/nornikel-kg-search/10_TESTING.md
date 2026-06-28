@@ -38,7 +38,7 @@ Metrics:
 - answer faithfulness;
 - unsupported claim count;
 - gap detection precision.
-- ACL leak count.
+- source-label leak count.
 - restricted source in context count.
 - prompt injection success count.
 
@@ -50,7 +50,7 @@ P0 pass thresholds for demo:
 - At least 85% numeric value + unit accuracy on curated numeric facts.
 - At least 80% effect direction accuracy on curated effect claims.
 - Zero final-answer claims from chunks without stable span mapping.
-- Zero inaccessible sources in generated answer context.
+- Zero disallowed-source-label evidence in generated answer context.
 - Zero prompt-injection fixture successes.
 
 ## Extraction Evaluation
@@ -73,9 +73,9 @@ Manual demo flows:
 4. Compare experiments.
 5. Open timeline.
 6. Open gaps.
-7. Approve or reject extracted fact.
+7. Inspect the evaluation/security dashboard.
 
-If UI scaffold is created, validate with browser screenshots for desktop and laptop widths.
+Validate the React UI with browser screenshots for desktop and laptop widths.
 
 ## Quality Gates
 
@@ -86,7 +86,7 @@ Before demo:
 - ingestion smoke test passes;
 - QA gold set report generated;
 - no uncited answer in test set;
-- no source access bypass in authorization tests;
+- no source-label filtering bypass;
 - no restricted source in answer context;
 - no unsupported generated answer claims;
 - adversarial prompt-injection fixtures pass;

@@ -28,13 +28,14 @@ Core services:
 - Query Planner;
 - Evidence Assembler;
 - Gap Analyzer;
-- Review Queue;
-- UI/API.
+- Extraction Workbench;
+- FastAPI API;
+- React Workbench.
 
 Stores:
 
-- PostgreSQL: users, sources, jobs, extraction runs, review queue, audit log, app state.
-- Neo4j: canonical entities and relationships.
+- DuckDB: source registry, ingestion runs, artifacts, evidence spans, facts, graph node/edge tables, answer claims, evaluation, and gap analytics.
+- NetworkX: per-query graph path/neighborhood materialization from DuckDB node/edge tables.
 - Qdrant: dense plus sparse vectors for chunks, claims, and entity pages.
 - Object/file storage: original files, Markdown views, structured parse JSON, extracted tables, extracted images, and manifests.
 
@@ -49,7 +50,7 @@ The MVP should parse every source into an auditable artifact set before extracti
 - extracted image/figure files;
 - `manifest.json` with source checksum, parser version, conversion settings, security label, and artifact checksums.
 
-Markdown is a retrieval and review layer, not the canonical scientific database. Canonical facts still live in the graph and app database after validation.
+Markdown is a retrieval and review layer, not the canonical scientific database. Canonical facts live in DuckDB after validation; graph paths are materialized from typed DuckDB node/edge tables.
 
 Artifact parsing has a hard gate: if a source cannot produce stable `EvidenceSpan` IDs for relevant text/table/image regions, it may support exploratory search but cannot support final answer claims.
 
@@ -70,7 +71,7 @@ Artifact parsing has a hard gate: if a source cannot produce stable `EvidenceSpa
 1. User question enters Query Planner.
 2. Planner extracts structured constraints: material, regime, property, time, lab, equipment, and intent.
 3. Exact dictionaries and graph aliases normalize constraints.
-4. Authorization filters remove inaccessible sources, chunks, claims, graph nodes, and relationships before generation.
+4. Source-label filters remove disallowed sources, chunks, claims, graph nodes, and relationships before generation.
 5. Hybrid retrieval finds relevant Markdown chunks, structured table rows, claims, and entity pages with payload filters.
 6. Graph expansion follows typed paths from retrieved entities.
 7. Evidence assembler deduplicates, ranks, and groups facts by experiment and source.
@@ -100,5 +101,5 @@ Avoid using GraphRAG as an opaque summarizer. The graph path and source spans re
 - If material or property is ambiguous, return clarification options.
 - If no experiment matches all constraints, return nearest matches and explicit gaps.
 - If evidence conflicts, show both sides and label the conflict.
-- If a source is inaccessible due to security labels, omit it and explain that restricted evidence exists only if policy allows disclosure.
+- If a source is disallowed by active source-label policy, omit it and explain that restricted evidence exists only if policy allows disclosure.
 - If parser quality fails for a document, quarantine that source for review instead of indexing low-confidence spans into final-answer retrieval.

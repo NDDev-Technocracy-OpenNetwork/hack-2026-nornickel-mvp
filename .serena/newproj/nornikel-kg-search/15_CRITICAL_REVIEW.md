@@ -66,7 +66,7 @@ Evidence: Security docs required object-level labels, but query flow did not exp
 
 Impact: Restricted source snippets, filenames, or graph paths could leak through answer generation.
 
-Fix: Added pre-generation ACL filtering and retrieval-layer ACL tests.
+Fix: Added pre-generation source-label filtering and retrieval-layer filtering tests. Full RBAC is deferred because the owner confirmed P0 has open demo access.
 
 Disposition: must-fix, fixed in planning docs.
 
@@ -114,7 +114,7 @@ Evidence: The earlier plan made PostgreSQL, Neo4j, React, worker queues, and obj
 
 Impact: The team could spend most of the hackathon on infrastructure and never produce the material-regime-property answer loop.
 
-Fix: MVP-lite now uses DuckDB for metadata/analytics, NetworkX for graph paths, Streamlit for the workbench, in-process jobs, local artifacts, and Qdrant for retrieval. Postgres, Neo4j, React, queues, and object storage remain P1 adapters.
+Fix: MVP now uses DuckDB for metadata/analytics, NetworkX for graph paths, React/Vite for the workbench, FastAPI for contracts, in-process jobs, local artifacts, and Qdrant for retrieval. Postgres, Neo4j, queues, and object storage remain P1 adapters.
 
 Disposition: must-fix, fixed in planning docs.
 
@@ -126,7 +126,7 @@ Evidence: External review correctly identified that the core system is DuckDB ev
 
 Impact: Without explicit ledger tables, ID policy, and answer claim verification, the scaffold could still drift into opaque LLM answers.
 
-Fix: Added `18_IMPLEMENTATION_SPEC.md`, expanded the MVP blueprint, added answer claim ledger API, and documented ID/confidence/ACL/evaluation contracts.
+Fix: Added `18_IMPLEMENTATION_SPEC.md`, expanded the MVP blueprint, added answer claim ledger API, and documented ID/confidence/source-label/evaluation contracts.
 
 Disposition: must-fix, fixed in planning docs.
 
@@ -137,7 +137,7 @@ Disposition: must-fix, fixed in planning docs.
 3. Extract at least one material-regime-property-measurement path from PDF/table data.
 4. Query returns an experiment table, evidence spans, graph path, and gaps.
 5. Every answer claim cites an `EvidenceSpan`.
-6. ACL filtering happens before LLM context construction.
+6. Source-label filtering happens before LLM context construction.
 7. Parser failures are quarantined, not silently indexed.
 
 ## Working Product Recommendation

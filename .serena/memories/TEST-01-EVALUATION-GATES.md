@@ -1,7 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 55e8e19 docs: integrate evidence-led mvp review
-Scope: .serena/newproj/nornikel-kg-search/10_TESTING.md; .serena/newproj/nornikel-kg-search/13_DELIVERY_PLAN.md; .serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md
+Last commit: 5acab4a docs: lock implementation decisions
+Scope: .serena/newproj/nornikel-kg-search/10_TESTING.md; .serena/newproj/nornikel-kg-search/13_DELIVERY_PLAN.md; .serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md; .serena/newproj/nornikel-kg-search/19_OWNER_DECISIONS.md
 Area: TEST
 -->
 
@@ -20,7 +20,7 @@ Capture required verification and acceptance gates for the MVP.
 ## Entry Points
 
 - Future `eval/gold_questions.yml`: curated success/conflict/gap/security questions.
-- Future `eval/adversarial_questions.yml`: prompt-injection and ACL fixtures.
+- Future `eval/adversarial_questions.yml`: prompt-injection and source-label fixtures.
 - Future `make test`: unit and integration checks.
 - Future `make eval`: gold and adversarial evaluation.
 
@@ -30,9 +30,9 @@ No code scaffold or test runner exists yet. Current verification is document-lev
 
 ## Contracts And Data
 
-P0 gold questions must include direct material-regime-property questions, comparison questions, provenance questions, contradiction questions, gap questions, negative controls, ACL controls, and prompt-injection controls.
+P0 gold questions must include one polished ideal scenario plus direct material-regime-property questions, comparison questions, provenance questions, contradiction questions, gap questions, negative controls, source-label controls, and prompt-injection controls.
 
-Non-negotiable demo gates are `unsupported_claim_count = 0` and `acl_leak_count = 0`.
+Non-negotiable demo gates are `unsupported_claim_count = 0` and `source_label_leak_count = 0`.
 
 ## Invariants
 
@@ -48,5 +48,4 @@ When scaffold code is added, add `make test`, `make eval`, and `make demo` targe
 
 - Current docs gate: `git diff --check`.
 - Current consistency gate: targeted `rg` scans over `README.md` and `.serena/newproj/nornikel-kg-search/`.
-- Future P0 gate: `make eval` must expose EvidenceRecall@10, TableRowRecall@10, citation coverage, unsupported claim count, ACL leak count, restricted source in context, and prompt-injection success count.
-
+- Future P0 gate: `make eval` must expose EvidenceRecall@10, TableRowRecall@10, citation coverage, unsupported claim count, source-label leak count, restricted source in context, and prompt-injection success count.

@@ -1,13 +1,13 @@
 # Infrastructure
 
-## MVP-Lite Deployment
+## P0 Server Deployment
 
-Use a local-first deployment for the first working demo:
+Use a server-first deployment for the working demo on `fa.nddev.asia` via `ssh server-nddev`:
 
-- `workbench`: Streamlit app;
-- `api`: FastAPI backend, optional in early local mode but required for clean contracts;
+- `frontend`: React/Vite static app;
+- `api`: FastAPI backend;
 - `duckdb`: local database file for source registry, facts, evaluations, and gap analytics;
-- `qdrant`: local Docker container or embedded/local test mode where acceptable;
+- `qdrant`: Docker container with persisted volume;
 - `artifacts/`: local generated artifact memory bank.
 
 P1/productization adds:
@@ -15,7 +15,6 @@ P1/productization adds:
 - `postgres`: app state and audit;
 - `neo4j`: persistent graph database;
 - `worker`: ingestion and extraction queue workers;
-- `frontend`: React app;
 - `minio` or S3-compatible object storage.
 
 ## Environment Configuration
@@ -27,13 +26,26 @@ Required configuration groups:
 - graph database URL and credentials when using Neo4j;
 - vector database URL;
 - object storage path/bucket;
-- LLM provider configuration;
-- embedding provider configuration;
-- auth mode;
+- LiteLLM/OpenAI-compatible LLM provider configuration;
+- LiteLLM/OpenAI-compatible embedding provider configuration;
+- auth mode, default `disabled`;
 - security label defaults;
 - logging level.
 
 Secrets must live outside the repository.
+
+P0 `.env.example` should include placeholders only:
+
+- `OPENAI_API_KEY`;
+- `LITELLM_API_BASE`;
+- `LLM_PROVIDER=litellm`;
+- `LLM_MODEL=openai/gpt-5.5-mini`;
+- `EMBEDDING_PROVIDER=litellm`;
+- `EMBEDDING_MODEL=openai/text-embedding-3-large`;
+- `QDRANT_URL=http://qdrant:6333`;
+- `DUCKDB_PATH=data/catalog.duckdb`;
+- `ARTIFACT_ROOT=data/artifacts`;
+- `APP_BASE_URL=https://fa.nddev.asia`.
 
 ## Jobs
 
