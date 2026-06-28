@@ -87,3 +87,18 @@ def test_sources_upload_and_evidence_listing(
     evidence = client.get(f"/sources/{source_id}/evidence")
     assert evidence.status_code == 200
     assert evidence.json()["evidence"][0]["span_type"] == "table_row"
+
+
+def test_sources_upload_rejects_unsupported_extension(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/sources/upload",
+        files={"file": ("report.pdf", b"%PDF-1.4", "application/pdf")},
+    )
+
+    assert response.status_code == 400
+    assert "Unsupported upload type" in response.json()["detail"]
