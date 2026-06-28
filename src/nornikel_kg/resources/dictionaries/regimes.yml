@@ -1,0 +1,16 @@
+regimes:
+  - regime_type: aging
+    canonical_name: Aging
+    aliases: ["aging", "старение"]
+  - regime_type: annealing
+    canonical_name: Annealing
+    aliases: ["annealing", "отжиг"]
+  - regime_type: cold_rolling
+    canonical_name: Cold rolling
+    aliases: ["cold rolling", "холодная прокатка"]
+  - regime_type: solution_treatment
+    canonical_name: Solution treatment
+    aliases: ["solution treatment", "закалка на раствор", "растворный отжиг"]
+  - regime_type: welding_cladding
+    canonical_name: Welding or cladding
+    aliases: ["welding", "cladding", "сварка", "наплавка"]

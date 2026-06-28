@@ -1,7 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 5acab4a docs: lock implementation decisions
-Scope: .serena/newproj/nornikel-kg-search/10_TESTING.md; .serena/newproj/nornikel-kg-search/13_DELIVERY_PLAN.md; .serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md; .serena/newproj/nornikel-kg-search/19_OWNER_DECISIONS.md
+Last commit: 259ecc6 feat: add react evidence workbench
+Scope: Makefile; tests/; scripts/run_eval.py; eval/; .github/workflows/ci.yml
 Area: TEST
 -->
 
@@ -19,14 +19,16 @@ Capture required verification and acceptance gates for the MVP.
 
 ## Entry Points
 
-- Future `eval/gold_questions.yml`: curated success/conflict/gap/security questions.
-- Future `eval/adversarial_questions.yml`: prompt-injection and source-label fixtures.
-- Future `make test`: unit and integration checks.
-- Future `make eval`: gold and adversarial evaluation.
+- `eval/gold_questions.yml`: curated success/conflict/gap questions for the synthetic fixture.
+- `eval/adversarial_questions.yml`: prompt-injection and source-label fixture expectations.
+- `tests/unit/`: ID stability, claim verifier, and source-label policy tests.
+- `tests/integration/`: FastAPI and DuckDB ledger tests.
+- `make ci`: local backend/frontend quality gate matching the current CI workflow.
+- `make eval`: deterministic fixture evaluation smoke.
 
 ## Current Behavior
 
-No code scaffold or test runner exists yet. Current verification is document-level: whitespace check, architecture consistency scans, and secret-pattern scans over touched docs.
+The scaffold has executable gates. `make ci` runs backend ruff/mypy/pytest and frontend TypeScript/build. `scripts/run_eval.py` uses the runtime QA service and synthetic DuckDB ledger to verify citation and safety metrics. CI runs the same backend and frontend checks on pull requests and pushes to `main`.
 
 ## Contracts And Data
 
@@ -42,10 +44,12 @@ Non-negotiable demo gates are `unsupported_claim_count = 0` and `source_label_le
 
 ## Change Rules
 
-When scaffold code is added, add `make test`, `make eval`, and `make demo` targets early rather than after the UI is complete.
+When new ingestion/retrieval behavior is added, extend `eval/gold_questions.yml`, tests, and `scripts/run_eval.py` in the same change.
 
 ## Verification
 
-- Current docs gate: `git diff --check`.
-- Current consistency gate: targeted `rg` scans over `README.md` and `.serena/newproj/nornikel-kg-search/`.
-- Future P0 gate: `make eval` must expose EvidenceRecall@10, TableRowRecall@10, citation coverage, unsupported claim count, source-label leak count, restricted source in context, and prompt-injection success count.
+- `make ci`: ruff, mypy, pytest, frontend typecheck, frontend build.
+- `make eval`: fixture QA metrics.
+- `docker compose config`: Compose validation.
+- Secret scan: `rg` command used in task excludes lockfiles/runtime dirs and checks for non-placeholder secrets.
+- Browser validation: Playwright CLI desktop and mobile screenshots under ignored `browser/`.

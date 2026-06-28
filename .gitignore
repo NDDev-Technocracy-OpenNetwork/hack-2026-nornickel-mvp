@@ -1,5 +1,7 @@
 # Runtime artifacts and local state
 artifacts/
+browser/
+.playwright-cli/
 data/raw/
 data/private/
 data/internal/
@@ -39,5 +41,6 @@ qdrant_storage/
 .serena/diagnostics/
 .serena/project.local.yml
 .serena/.onboarding
+.serena/.serena_sync_state.json
 .serena/.locks/
 .serena/.state/
