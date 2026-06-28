@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 273c5f5 docs: sync ledger ingestion knowledge
+Last commit: 5dfba92 fix: validate uploaded source file extensions
 Scope: Makefile; tests/; scripts/run_eval.py; eval/; .github/workflows/ci.yml
 Area: TEST
 -->
