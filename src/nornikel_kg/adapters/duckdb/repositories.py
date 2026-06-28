@@ -221,6 +221,7 @@ class DuckDBLedgerRepository:
                 """
                 SELECT
                   m.measurement_id,
+                  m.source_id,
                   m.experiment_id,
                   m.property_id,
                   m.property_name,
@@ -726,24 +727,25 @@ class DuckDBLedgerRepository:
         )
 
     def _experiment_from_row(self, row: tuple[Any, ...]) -> ExperimentRow:
-        evidence_ids = json.loads(str(row[14]))
+        evidence_ids = json.loads(str(row[15]))
         return ExperimentRow(
-            experiment_id=str(row[1]),
-            material_id=str(row[7]),
-            material_name=str(row[8]),
-            regime_id=str(row[9]),
-            regime_summary=str(row[10]),
-            property_id=str(row[2]),
-            property_name=str(row[3]),
+            source_id=str(row[1]),
+            experiment_id=str(row[2]),
+            material_id=str(row[8]),
+            material_name=str(row[9]),
+            regime_id=str(row[10]),
+            regime_summary=str(row[11]),
+            property_id=str(row[3]),
+            property_name=str(row[4]),
             measurement={
-                "value": None if row[4] is None else float(row[4]),
-                "unit": None if row[5] is None else str(row[5]),
-                "delta_value": None if row[12] is None else float(row[12]),
-                "delta_unit": None if row[13] is None else str(row[13]),
-                "effect_direction": str(row[11]),
+                "value": None if row[5] is None else float(row[5]),
+                "unit": None if row[6] is None else str(row[6]),
+                "delta_value": None if row[13] is None else float(row[13]),
+                "delta_unit": None if row[14] is None else str(row[14]),
+                "effect_direction": str(row[12]),
             },
             evidence_ids=evidence_ids,
-            validation_status=row[6],
+            validation_status=row[7],
         )
 
     def _build_conflicts(self, evidence: list[EvidenceSpan]) -> list[dict[str, object]]:

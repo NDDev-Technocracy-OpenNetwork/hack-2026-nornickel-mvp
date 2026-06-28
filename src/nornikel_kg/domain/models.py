@@ -106,6 +106,7 @@ class EffectClaim(BaseModel):
 
 class ExperimentRow(BaseModel):
     experiment_id: str
+    source_id: str | None = None
     material_id: str
     material_name: str
     regime_id: str

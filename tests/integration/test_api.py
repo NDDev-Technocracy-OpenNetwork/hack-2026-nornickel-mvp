@@ -102,3 +102,58 @@ def test_sources_upload_rejects_unsupported_extension(
 
     assert response.status_code == 400
     assert "Unsupported upload type" in response.json()["detail"]
+
+
+def test_qa_endpoint_can_filter_by_source_id_and_material(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+    csv_payload = (
+        "experiment_id,material,regime,temperature_c,duration_h,atmosphere,"
+        "property,method,baseline_value,treated_value,unit,effect\n"
+        "exp_filter,NiFilter,aging,700,8,air,Vickers hardness,HV10,210,220,HV,increase\n"
+    )
+    source_id = (
+        client.post(
+            "/sources/upload",
+            files={"file": ("filter_source.csv", csv_payload, "text/csv")},
+        )
+        .json()["source"]["source_id"]
+    )
+
+    response = client.post(
+        "/qa/ask",
+        json={
+            "question": "Что делали с NiFilter при старении 700 C 8 ч?",
+            "language": "ru",
+            "filters": {"source_ids": [source_id], "material": "NiFilter"},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["experiments"]) == 1
+    assert payload["experiments"][0]["source_id"] == source_id
+    assert "NiFilter" in payload["experiments"][0]["material_name"]
+
+
+def test_qa_endpoint_source_filter_empty_result(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/qa/ask",
+        json={
+            "question": "Что делали по Ni-30Cu при старении 700 C 8 ч?",
+            "language": "ru",
+            "filters": {"source_ids": ["nonexistent_source_id"]},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["experiments"] == []
+    assert payload["answer_summary"] == []

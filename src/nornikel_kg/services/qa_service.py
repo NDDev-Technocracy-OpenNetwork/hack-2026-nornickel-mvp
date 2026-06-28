@@ -38,7 +38,11 @@ class DemoQAService:
         packet = self._load_packet()
         allowed_evidence = self.source_label_policy.filter_spans(packet.evidence)
         allowed_span_ids = {span.span_id for span in allowed_evidence}
-        selected_experiments = self._select_experiments(request.question, packet.experiments)
+        selected_experiments = self._select_experiments(
+            question=request.question,
+            experiments=packet.experiments,
+            request_filters=request.filters,
+        )
         selected_experiments = [
             experiment
             for experiment in selected_experiments
@@ -129,6 +133,7 @@ class DemoQAService:
             supporting_span_ids=[primary_span.span_id],
         )
         experiment = ExperimentRow(
+            source_id=primary_span.source_id,
             experiment_id=measurement.experiment_id,
             material_id=effect.material_id,
             material_name="Ni-30Cu",
@@ -217,18 +222,25 @@ class DemoQAService:
 
     def _select_experiments(
         self,
+        *,
         question: str,
         experiments: list[ExperimentRow],
+        request_filters: dict[str, object] | None = None,
     ) -> list[ExperimentRow]:
         normalized_question = self._normalize(question)
         requested_property = self._requested_property(question)
+        has_request_filters = bool(request_filters)
         exact_materials = {
             self._normalize(experiment.material_name)
             for experiment in experiments
             if self._normalize(experiment.material_name) in normalized_question
         }
+        filtered_experiments: list[ExperimentRow] = []
         scored: list[tuple[int, ExperimentRow]] = []
         for experiment in experiments:
+            if not self._matches_filters(experiment, request_filters):
+                continue
+            filtered_experiments.append(experiment)
             if exact_materials and self._normalize(experiment.material_name) not in exact_materials:
                 continue
             if requested_property and not self._property_matches(requested_property, experiment):
@@ -237,9 +249,90 @@ class DemoQAService:
             if score > 0:
                 scored.append((score, experiment))
         if not scored and not requested_property:
+            if has_request_filters:
+                return filtered_experiments[:5]
             return experiments[:5]
         scored.sort(key=lambda item: (-item[0], item[1].experiment_id))
         return [experiment for _, experiment in scored[:5]]
+
+    def _matches_filters(
+        self,
+        experiment: ExperimentRow,
+        filters: dict[str, object] | None,
+    ) -> bool:
+        if not filters:
+            return True
+        source_filter = self._list_filter_values(filters, "source_ids", "source_id")
+        if source_filter and not self._matches_source_filter(experiment.source_id, source_filter):
+            return False
+        material_filter = self._text_filter_values(filters, "material_name", "material")
+        if material_filter and not self._matches_text_filter(
+            experiment.material_name, material_filter
+        ):
+            return False
+        property_filter = self._text_filter_values(filters, "property_name", "property")
+        if property_filter and not self._matches_text_filter(
+            experiment.property_name, property_filter
+        ):
+            return False
+        regime_filter = self._text_filter_values(filters, "regime_summary", "regime")
+        if regime_filter and not self._matches_text_filter(
+            experiment.regime_summary, regime_filter
+        ):
+            return False
+        experiment_filter = self._text_filter_values(filters, "experiment_id")
+        if experiment_filter and not self._matches_text_filter(
+            experiment.experiment_id, experiment_filter
+        ):
+            return False
+        regime_id_filter = self._text_filter_values(filters, "regime_id")
+        if not regime_id_filter:
+            return True
+        return self._matches_text_filter(experiment.regime_id, regime_id_filter)
+
+    def _matches_source_filter(self, source_id: str | None, allowed_source_ids: set[str]) -> bool:
+        if not allowed_source_ids:
+            return True
+        return source_id is not None and source_id in allowed_source_ids
+
+    def _list_filter_values(self, filters: dict[str, object], *keys: str) -> set[str]:
+        for key in keys:
+            raw = filters.get(key)
+            if raw is None:
+                continue
+            if isinstance(raw, str):
+                value = raw.strip()
+                return {value} if value else set()
+            if isinstance(raw, list | tuple):
+                return {
+                    str(item).strip()
+                    for item in raw
+                    if str(item).strip()
+                }
+        return set()
+
+    def _text_filter_values(self, filters: dict[str, object], *keys: str) -> set[str]:
+        for key in keys:
+            raw = filters.get(key)
+            if raw is None:
+                continue
+            if isinstance(raw, str):
+                normalized = self._normalize(raw.strip())
+                return {normalized} if normalized else set()
+            if isinstance(raw, list | tuple):
+                normalized_values = {
+                    self._normalize(str(item).strip())
+                    for item in raw
+                    if str(item).strip()
+                }
+                return {value for value in normalized_values if value}
+        return set()
+
+    def _matches_text_filter(self, value: str, candidates: set[str]) -> bool:
+        if not candidates:
+            return True
+        normalized_value = self._normalize(value)
+        return any(candidate in normalized_value for candidate in candidates)
 
     def _score_experiment(self, question: str, experiment: ExperimentRow) -> int:
         normalized_question = self._normalize(question)
