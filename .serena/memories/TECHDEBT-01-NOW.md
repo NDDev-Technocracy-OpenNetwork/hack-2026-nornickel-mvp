@@ -1,7 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 1ad13b2 chore: add ci docker docs and memory sync
-Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; tests/
+Last commit: e7e92ec docs: record fa deployment contract
+Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; docs/deployment/fa-nddev.md; tests/
 Area: TECHDEBT
 -->
 
@@ -16,6 +16,7 @@ Capture verified scaffold gaps that matter for future implementation, without us
 - `src/nornikel_kg/services/qa_service.py`: deterministic QA assembly.
 - `src/nornikel_kg/adapters/duckdb/repositories.py`: synthetic ledger seed/load adapter.
 - `docker-compose.yml`: Qdrant is present but not yet used by runtime retrieval.
+- `docs/deployment/fa-nddev.md`: server deployment contract and smoke checks.
 - `pyproject.toml`: Docling, fixture generators, LiteLLM, Qdrant, DuckDB, and dev tooling dependencies.
 - `tests/`: current unit/integration coverage.
 
@@ -33,6 +34,10 @@ indexes, and does not call LiteLLM for extraction or answer writing.
 
 FastAPI tests pass but emit a Starlette deprecation warning that `fastapi.testclient` currently
 uses `httpx` and may require `httpx2` in a future dependency cycle.
+
+The server deployment works behind Nginx on `https://fa.nddev.asia`, but the API Docker image
+currently installs dependencies with `pip install .` during image build. Rebuilds can therefore
+redownload large wheels when the Docker cache is invalidated.
 
 ## Contracts And Data
 
@@ -62,4 +67,5 @@ retrieval/indexing third, answer assembly last. Extend tests and eval fixtures w
 - Real Docling/OCR ingestion is not wired.
 - Qdrant hybrid retrieval is not wired.
 - LiteLLM extraction and answer synthesis are not wired.
-- No production deployment to `fa.nddev.asia` has been run yet.
+- API Docker builds should be optimized with a lock-aware install and Docker build cache mounts
+  before frequent server redeploys.

@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: ebcd076 Merge pull request #4 from rldyourmnd/codex/fix-runtime-project-root
+Last commit: e7e92ec docs: record fa deployment contract
 Scope: Makefile; .github/workflows/ci.yml; docker-compose.yml; docs/deployment/fa-nddev.md; apps/web/; services/api/
 Area: RELEASE
 -->
