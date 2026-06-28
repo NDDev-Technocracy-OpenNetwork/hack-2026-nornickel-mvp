@@ -220,9 +220,17 @@ class DemoQAService:
         question: str,
         experiments: list[ExperimentRow],
     ) -> list[ExperimentRow]:
+        normalized_question = self._normalize(question)
         requested_property = self._requested_property(question)
+        exact_materials = {
+            self._normalize(experiment.material_name)
+            for experiment in experiments
+            if self._normalize(experiment.material_name) in normalized_question
+        }
         scored: list[tuple[int, ExperimentRow]] = []
         for experiment in experiments:
+            if exact_materials and self._normalize(experiment.material_name) not in exact_materials:
+                continue
             if requested_property and not self._property_matches(requested_property, experiment):
                 continue
             score = self._score_experiment(question, experiment)
