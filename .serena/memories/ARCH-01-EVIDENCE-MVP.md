@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: f06fb3a feat: harden source lifecycle with validated upload and delete
+Last commit: a3bf103 feat: expose QA filters in frontend workbench
 Scope: apps/web/; services/api/; src/nornikel_kg/; docker-compose.yml; .github/workflows/ci.yml; .serena/newproj/nornikel-kg-search/
 Area: ARCH
 -->
@@ -38,6 +38,8 @@ Qdrant is present in Compose and dependency configuration but is not yet used by
 
 Current implemented port: `EvidenceLedgerPort`. It covers source listing, evidence listing,
 source upload, source deletion, and evidence packet loading.
+Workbench now renders user-configured filter controls that serialize typed `AskFilters` into
+`/qa/ask`.
 
 Planned ports remain: `DocumentParserPort`, `ArtifactStorePort`, `MetadataStorePort`, `VectorIndexPort`, `GraphStorePort`, `EmbeddingModelPort`, `SparseEncoderPort`, `LLMExtractorPort`, `SecurityLabelPolicyPort`, and `EvaluationStorePort`.
 

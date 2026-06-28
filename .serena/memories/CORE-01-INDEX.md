@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: f06fb3a feat: harden source lifecycle with validated upload and delete
+Last commit: a3bf103 feat: expose QA filters in frontend workbench
 Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml
 Area: CORE
 -->
@@ -54,6 +54,8 @@ React artifact bank -> FastAPI `/sources/upload` -> DuckDB source/evidence/fact 
 hard delete via `DELETE /sources/{source_id}` and validates upload extension at API entry.
 Qdrant, Docling/OCR, NetworkX, and LiteLLM are prepared as modular next adapters,
 not yet wired into the scaffold runtime.
+The workbench now exposes filter controls for `source_ids`, `material`, `property`, `regime`,
+`experiment_id`, and `regime_id`, and sends `AskFilters` with each `/qa/ask` request.
 `/qa/ask` honors typed request filters when selecting experiments, including `source_ids`,
 `source_id`, `material`/`material_name`, `property`/`property_name`, `regime`/`regime_id`,
 and `experiment_id`. Unknown filter keys are rejected at request validation.

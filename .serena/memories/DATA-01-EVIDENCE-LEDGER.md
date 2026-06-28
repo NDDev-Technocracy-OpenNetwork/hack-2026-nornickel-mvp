@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: f06fb3a feat: harden source lifecycle with validated upload and delete
+Last commit: a3bf103 feat: expose QA filters in frontend workbench
 Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/; src/nornikel_kg/services/qa_service.py; src/nornikel_kg/services/runtime.py; sample_docs/synthetic/; eval/
 Area: DATA
 -->
@@ -62,6 +62,9 @@ The filters model is now typed as `AskFilters`:
 `experiment_id`, and `regime_id`.
 Single scalar values are coerced to one-element lists to preserve API usability,
 while unknown filter keys are rejected by request validation.
+
+Frontend now includes a dedicated workbench filter surface and sends `AskFilters`
+for source/material/property/regime/experiment scope at request time.
 
 ## Contracts And Data
 

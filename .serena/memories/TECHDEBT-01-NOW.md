@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: f06fb3a feat: harden source lifecycle with validated upload and delete
+Last commit: a3bf103 feat: expose QA filters in frontend workbench
 Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; docs/deployment/fa-nddev.md; tests/
 Area: TECHDEBT
 -->
@@ -36,6 +36,8 @@ QA requests now support filter-aware experiment selection with fallback behavior
 to filtered result sets.
 `/qa/ask` now uses a typed `AskFilters` contract and rejects unknown filter keys at request parse time.
 Scalar filter values are coerced to one-element lists to preserve API ergonomics.
+The workbench now provides interactive QA filter controls (sources/material/property/regime/
+experiment), which removes manual JSON request editing.
 Source lifecycle was hardened with:
 - upload extension validation (`.csv`, `.md`, `.markdown`, `.txt`, `.text` only),
 - transactional upload/seed paths in DuckDB repository,
