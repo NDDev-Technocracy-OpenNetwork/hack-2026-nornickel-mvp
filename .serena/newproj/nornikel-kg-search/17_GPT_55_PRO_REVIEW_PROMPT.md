@@ -1,0 +1,120 @@
+# GPT-5.5 Pro Review Prompt
+
+Use this prompt in ChatGPT 5.5 Pro to get an external architecture/product review.
+
+```text
+You are a senior AI product architect, staff backend engineer, information retrieval specialist, and materials-informatics reviewer.
+
+Context:
+We are building a hackathon MVP for Nornikel. The challenge is to create a knowledge graph or search-analytics system connecting articles, experiments, materials, properties, processing regimes, installations/equipment, research teams, decisions, conclusions, and data gaps.
+
+The system must answer questions like:
+"What has already been done for alloy/material X under processing regime Y, and what effect was observed on property Z?"
+
+It must show:
+- exact evidence from source documents/tables/images;
+- related entities;
+- experiment history;
+- graph paths;
+- contradictions;
+- gaps in available data;
+- grounded answer, not a generic chatbot response.
+
+Current proposed direction:
+Evidence-first Scientific Knowledge Graph + Hybrid Retrieval.
+
+Critical MVP correction:
+Do not start with a heavy production stack. Build MVP-lite first:
+- Streamlit workbench for the first UI;
+- FastAPI/application services for clean contracts;
+- Docling artifact memory bank: Markdown + structured JSON + tables + images + manifest;
+- DuckDB for source registry, artifacts, facts, evaluation, and gap analytics;
+- Qdrant for dense+sparse hybrid retrieval;
+- NetworkX for P0 graph path/neighborhood;
+- ports/adapters so DuckDB -> PostgreSQL, NetworkX -> Neo4j, Streamlit -> React later.
+
+Non-negotiable invariant:
+Every final-answer claim must map to an EvidenceSpan: exact source_id, span_id, page/row/image/table metadata, extraction run, validation status, and graph path or indexed retrieval unit.
+
+P0 vertical slice:
+1. Import/upload source files.
+2. Parse into artifact memory bank.
+3. Generate stable EvidenceSpan IDs.
+4. Extract material/regime/property/measurement facts using dictionaries, rules, table extraction, and LLM JSON extraction on small chunks.
+5. Materialize canonical graph path:
+   Material <-[:USES_MATERIAL]- Experiment
+   Experiment -[:APPLIES_REGIME]-> ProcessingRegime
+   Experiment -[:HAS_MEASUREMENT]-> PropertyMeasurement
+   PropertyMeasurement -[:OF_PROPERTY]-> Property
+   PropertyMeasurement -[:SUPPORTED_BY]-> EvidenceSpan
+   EvidenceSpan -[:FROM_DOCUMENT]-> Document
+6. Index Markdown chunks, table rows, claims, and entity/experiment summaries in Qdrant.
+7. Answer material-regime-property questions with experiment table, evidence cards, graph path, conflicts/gaps, and grounded summary.
+8. Evaluate on 10-20 gold questions with Recall@10, citation coverage, unsupported claim count, and ACL leak checks.
+
+Deferrals until P0 works:
+- React frontend;
+- Neo4j;
+- PostgreSQL;
+- worker queues;
+- full review workflow;
+- MatSciBERT/ChemDataExtractor;
+- community/global GraphRAG summaries;
+- complex ontology expansion.
+
+Please perform a deep review and produce a rigorous report:
+
+1. Challenge the MVP-lite architecture:
+   - Is DuckDB + NetworkX + Qdrant + Streamlit the right first implementation?
+   - What will break first?
+   - What should stay as ports/adapters?
+   - What should be simplified further?
+
+2. Review the ingestion and artifact memory bank:
+   - Is Markdown + structured JSON + extracted assets + manifest enough?
+   - What metadata is missing?
+   - How should stable EvidenceSpan IDs be generated?
+   - How should tables/images/scanned PDFs be handled?
+
+3. Review extraction:
+   - Are dictionaries/rules/table extraction/LLM JSON extraction enough for a hackathon?
+   - What schemas are required?
+   - How should confidence and validation be handled?
+   - What should be done when facts conflict?
+
+4. Review retrieval and QA:
+   - How should dense + sparse retrieval be configured?
+   - What should be indexed as separate retrieval units?
+   - What reranking features matter most?
+   - How should the answer be assembled to avoid hallucinations?
+
+5. Review graph design:
+   - Is the canonical graph path correct?
+   - Which relationships/nodes are missing for material science?
+   - Is NetworkX acceptable for P0?
+   - When exactly should we switch to Neo4j?
+
+6. Review UI:
+   - What screens are required for a convincing MVP?
+   - What can be omitted?
+   - How should the demo flow be structured for judges?
+
+7. Review security:
+   - What are the top risks for internal documents?
+   - How should ACL filtering happen before LLM context construction?
+   - What prompt-injection and data-leak checks are required?
+
+8. Review evaluation:
+   - What 10-20 gold questions should we create?
+   - What metrics are realistic for a hackathon?
+   - What thresholds are good enough?
+
+9. Produce final recommendations:
+   - Must-fix before coding.
+   - Should-fix during scaffold.
+   - Defer safely.
+   - Proposed final P0 implementation plan by day/hour.
+   - Proposed repository structure.
+
+Be skeptical. Prefer a working, high-quality, modular MVP over an impressive but unbuildable architecture. Do not give generic RAG advice; tailor the answer to materials science, internal documents, experiments, process regimes, properties, evidence spans, and hackathon constraints.
+```

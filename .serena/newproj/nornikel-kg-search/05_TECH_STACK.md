@@ -1,0 +1,129 @@
+# Tech Stack
+
+## Recommended MVP-Lite Stack
+
+| Layer | Choice | Reason |
+| --- | --- | --- |
+| App Shell | Streamlit | Fastest useful workbench for upload, search, evidence tables, gap matrix, and graph preview |
+| Backend API | FastAPI, Pydantic | Typed contracts, OpenAPI, and clean path to replace Streamlit calls with a real frontend |
+| App/Analytics DB | DuckDB | Embedded persistence for source registry, artifacts, extracted facts, and gap analytics |
+| Graph Adapter | NetworkX first | In-memory typed graph paths and node-link export without Neo4j setup cost |
+| Vector Search | Qdrant local/Docker | Dense plus sparse hybrid retrieval, payload filters, and production-compatible API |
+| Document Parsing | Docling first, GROBID for scholarly PDF fallback | Markdown/JSON artifacts, OCR, layout, tables, references |
+| Lightweight Conversion | MarkItDown optional | Quick Markdown conversion for simple Office/PDF inputs |
+| Parse QA Alternatives | Unstructured, Marker, MinerU | Compare on hard PDFs, scanned images, tables, formulas |
+| Workers | Synchronous job runner first | Simpler MVP; promote to queue when ingestion becomes long-running |
+| Object Storage | Local artifact directory | Original files, Markdown, structured JSON, tables, images, manifests |
+| Graph UI | Streamlit component or embedded HTML | Controlled answer-path graph preview without full frontend build |
+| Tables | Streamlit dataframes | Evidence and experiment comparison in the first demo |
+| Auth MVP | Local users or reverse-proxy stub | Replaceable with corporate SSO |
+| Deployment | Local Python app plus optional Docker Compose | Fast local demo; Qdrant can run in Docker |
+| Observability | Structured logs, OpenTelemetry-ready IDs | Trace ingestion and answer provenance |
+
+## P1/Productization Adapters
+
+| Port | MVP-Lite Adapter | P1 Adapter |
+| --- | --- | --- |
+| MetadataStore | DuckDB | PostgreSQL |
+| GraphStore | NetworkX over typed facts | Neo4j |
+| WorkbenchUI | Streamlit | React + Cytoscape/React Flow |
+| JobRunner | In-process runner | Celery/RQ/Arq worker queue |
+| ArtifactStore | Local filesystem | S3-compatible object storage |
+| AuthProvider | Local/dev stub | Corporate SSO/RBAC |
+
+## Retrieval Tooling
+
+Use Qdrant collections for:
+
+- Markdown chunks;
+- structured table rows;
+- document chunks;
+- extracted claims;
+- entity summaries;
+- experiment summaries.
+
+Each record should include:
+
+- dense embedding;
+- sparse/BM25-like vector where supported;
+- payload filters for material, property, regime, equipment, lab, source, artifact type, page number, table ID, image/figure ID, date, security label, validation status.
+
+## Graph Tooling
+
+Use the same labels in both NetworkX and Neo4j adapters:
+
+- Material;
+- Alloy;
+- Composition;
+- Experiment;
+- Sample;
+- ProcessingRegime;
+- Property;
+- PropertyMeasurement;
+- Equipment;
+- Installation;
+- Team;
+- Person;
+- Lab;
+- Document;
+- EvidenceSpan;
+- Claim;
+- Conclusion;
+- Decision;
+- Gap.
+
+Use relationship types:
+
+- MENTIONS;
+- USES_MATERIAL;
+- APPLIES_REGIME;
+- HAS_MEASUREMENT;
+- OF_PROPERTY;
+- PRODUCED_EFFECT;
+- PERFORMED_BY;
+- USED_EQUIPMENT;
+- AUTHORED_BY;
+- SUPPORTS;
+- CONTRADICTS;
+- DERIVED_FROM;
+- SUPPORTED_BY;
+- FROM_DOCUMENT;
+- REVIEWED_BY;
+- HAS_GAP;
+- ADDRESSES_GAP;
+- REQUIRES_FOLLOWUP.
+
+## LLM And Embeddings
+
+Keep providers configurable:
+
+- extraction model;
+- answer model;
+- embedding model;
+- reranker.
+
+Hard requirements:
+
+- structured extraction output;
+- deterministic schema validation;
+- source-grounded answer generation;
+- no direct graph writes from model output;
+- no uncited final answers.
+
+## Document Artifact Decision
+
+Use Docling as the default parser because it supports document conversion to Markdown and structured document formats, OCR, layout-aware parsing, table recovery, image export, and RAG chunking. Use GROBID for scholarly PDFs when references, citation contexts, and TEI/XML structure matter.
+
+Do not use a flat folder of Markdown files as the whole memory system. Use Markdown as the readable projection of a richer artifact bundle:
+
+- Markdown for fast inspection and text retrieval.
+- JSON/DoclingDocument or equivalent for structure and source spans.
+- Extracted assets for tables, figures, page images, and OCR review.
+- Manifest files for checksums, parser versions, security labels, and reproducibility.
+
+## Alternatives To Keep Open
+
+- OpenSearch instead of Qdrant if enterprise search integration is required.
+- PostgreSQL plus pgvector for a smaller MVP if operational simplicity matters more than hybrid retrieval quality.
+- Neo4j for P1 when persistent graph queries, Cypher, multi-user graph exploration, or graph analytics become necessary.
+- RDF/OWL store for future ontology-heavy integration, not for first hackathon implementation.

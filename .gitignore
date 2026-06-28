@@ -1,0 +1,43 @@
+# Runtime artifacts and local state
+artifacts/
+data/raw/
+data/private/
+data/internal/
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node/frontend
+node_modules/
+dist/
+build/
+
+# Local databases and vector stores
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.db
+qdrant_storage/
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+
+# Serena runtime-local state
+.serena/cache/
+.serena/reviews/
+.serena/diagnostics/
+.serena/project.local.yml
+.serena/.onboarding
+.serena/.locks/
+.serena/.state/

@@ -1,0 +1,84 @@
+# Testing Strategy
+
+## Unit Tests
+
+- Entity normalization.
+- Unit conversion.
+- Regime parameter parsing.
+- Schema validation.
+- Provenance attachment.
+- Gap detection rules.
+- Query planning.
+
+## Integration Tests
+
+- Ingest sample document and experiment row.
+- Extract candidate facts.
+- Resolve entities with dictionaries.
+- Write graph nodes and relationships.
+- Index chunks and claims.
+- Ask a QA question and verify evidence links.
+
+## Retrieval Evaluation
+
+Create a small gold set:
+
+- 20-50 material/regime/property questions;
+- expected source IDs;
+- expected experiment IDs;
+- expected answer direction;
+- expected gap or conflict labels.
+
+Metrics:
+
+- retrieval hit rate at 5/10/20;
+- evidence-span hit rate at 5/10/20;
+- graph path correctness;
+- citation coverage;
+- answer faithfulness;
+- unsupported claim count;
+- gap detection precision.
+
+P0 pass thresholds for demo:
+
+- 100% of answer claims cite an `EvidenceSpan`.
+- At least 80% Recall@10 on the curated demo QA set.
+- Zero final-answer claims from chunks without stable span mapping.
+- Zero inaccessible sources in generated answer context.
+
+## Extraction Evaluation
+
+Measure:
+
+- entity precision/recall on sample documents;
+- relation precision/recall;
+- measurement value and unit accuracy;
+- duplicate entity merge accuracy;
+- reviewer correction rate.
+
+## UI Validation
+
+Manual demo flows:
+
+1. Search for material/regime/property.
+2. Open answer evidence.
+3. Expand graph path.
+4. Compare experiments.
+5. Open timeline.
+6. Open gaps.
+7. Approve or reject extracted fact.
+
+If UI scaffold is created, validate with browser screenshots for desktop and laptop widths.
+
+## Quality Gates
+
+Before demo:
+
+- parser smoke test passes on representative PDF, scanned image/PDF, DOCX, XLSX/CSV, and at least one table-heavy source;
+- backend tests pass;
+- ingestion smoke test passes;
+- QA gold set report generated;
+- no uncited answer in test set;
+- no source access bypass in authorization tests;
+- Docker Compose starts from clean checkout;
+- seed dataset import is reproducible.
