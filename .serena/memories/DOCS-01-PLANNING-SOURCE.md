@@ -1,6 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 5acab4a docs: lock implementation decisions
+Last updated: 2026-06-29
+Last commit: f747194 chore(docs): add project instruction docs
 Scope: README.md; .serena/newproj/nornikel-kg-search/
 Area: DOCS
 -->
@@ -24,6 +25,8 @@ Capture how to use and maintain the planning package before implementation scaff
 - `.serena/newproj/nornikel-kg-search/17_GPT_55_PRO_REVIEW_PROMPT.md`: prompt for external model review.
 - `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md`: scaffold authority.
 - `.serena/newproj/nornikel-kg-search/19_OWNER_DECISIONS.md`: closed owner decisions for implementation.
+- `AGENTS.md`: Codex-native project instructions.
+- `.claude/CLAUDE.md`: Claude Code project memory and operational notes.
 
 ## Entry Points
 

@@ -1,6 +1,6 @@
 <!-- Memory Metadata
-Last updated: 2026-06-28
-Last commit: 5dfba92 fix: validate uploaded source file extensions
+Last updated: 2026-06-29
+Last commit: f747194 chore(docs): add project instruction docs
 Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml
 Area: CORE
 -->
@@ -14,6 +14,8 @@ Index the durable project knowledge for the Nornikel Materials KG Search hackath
 ## Source Of Truth
 
 - `README.md`: repository overview, quick start, demo scenario, architecture boundary, and current scaffold status.
+- `AGENTS.md`: Codex-native project instructions and plugin/tooling policy.
+- `.claude/CLAUDE.md`: Claude Code project memory and operational commands.
 - `apps/web/`: React/Vite analysis workbench.
 - `services/api/`: FastAPI route layer.
 - `src/nornikel_kg/`: backend domain, ports, adapters, and application services.
