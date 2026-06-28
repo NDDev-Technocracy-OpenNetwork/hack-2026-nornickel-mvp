@@ -61,11 +61,11 @@
   "question": "What was done for alloy X under regime Y and how did property Z change?",
   "language": "ru",
   "filters": {
-    "material_ids": ["mat_..."],
-    "property_ids": ["prop_..."],
-    "regime_ids": ["reg_..."],
-    "date_from": "2020-01-01",
-    "validated_only": false
+    "material": ["Ni-30Cu"],
+    "property": ["Vickers hardness"],
+    "regime": ["aging 700C"],
+    "source_id": ["src_..."],
+    "regime_id": ["reg_..."]
   },
   "include_graph": true,
   "include_gaps": true

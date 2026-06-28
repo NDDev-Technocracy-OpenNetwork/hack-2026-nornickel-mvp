@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 832fee9 fix: apply QA filters for source and metadata matching
+Last commit: 5f6f8f2 chore: type ask filters for /qa ask requests
 Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/; src/nornikel_kg/services/qa_service.py; src/nornikel_kg/services/runtime.py; sample_docs/synthetic/; eval/
 Area: DATA
 -->
@@ -51,6 +51,12 @@ or text uploads are stored as evidence spans without deriving measurements in P0
 `DemoQAService` now applies `AskRequest.filters` before ranking experiments; filtered
 queries can constrain by `source_ids`, `material`/`material_name`, `property`/`property_name`,
 `regime`/`regime_id`, and other stable keys from experiment metadata.
+The filters model is now typed as `AskFilters`:
+`source_ids`, `source_id`, `material_name`, `material`,
+`property_name`, `property`, `regime_summary`, `regime`,
+`experiment_id`, and `regime_id`.
+Single scalar values are coerced to one-element lists to preserve API usability,
+while unknown filter keys are rejected by request validation.
 
 ## Contracts And Data
 

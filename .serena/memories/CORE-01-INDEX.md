@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 832fee9 fix: apply QA filters for source and metadata matching
+Last commit: 5f6f8f2 chore: type ask filters for /qa ask requests
 Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml
 Area: CORE
 -->
@@ -52,8 +52,9 @@ evidence cards, graph path, conflict, gap, and evaluation/security metrics. Sour
 React artifact bank -> FastAPI `/sources/upload` -> DuckDB source/evidence/fact writes ->
 `/sources` and `/sources/{source_id}/evidence` listing. Qdrant, Docling/OCR, NetworkX, and
 LiteLLM are prepared as modular next adapters, not yet wired into the scaffold runtime.
-`/qa/ask` honors request filters when selecting experiments, including `source_ids`,
-`material`, and other text filters.
+`/qa/ask` honors typed request filters when selecting experiments, including `source_ids`,
+`source_id`, `material`/`material_name`, `property`/`property_name`, `regime`/`regime_id`,
+and `experiment_id`. Unknown filter keys are rejected at request validation.
 
 ## Invariants
 

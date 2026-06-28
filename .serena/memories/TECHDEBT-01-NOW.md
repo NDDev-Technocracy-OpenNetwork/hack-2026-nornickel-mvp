@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 832fee9 fix: apply QA filters for source and metadata matching
+Last commit: 5f6f8f2 chore: type ask filters for /qa ask requests
 Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; docs/deployment/fa-nddev.md; tests/
 Area: TECHDEBT
 -->
@@ -34,6 +34,8 @@ not yet parse arbitrary uploaded PDFs/DOCX/PPTX/XLSX/images, does not build Qdra
 does not call LiteLLM for extraction or answer writing.
 QA requests now support filter-aware experiment selection with fallback behavior aligned
 to filtered result sets.
+`/qa/ask` now uses a typed `AskFilters` contract and rejects unknown filter keys at request parse time.
+Scalar filter values are coerced to one-element lists to preserve API ergonomics.
 
 FastAPI tests pass but emit a Starlette deprecation warning that `fastapi.testclient` currently
 uses `httpx` and may require `httpx2` in a future dependency cycle.

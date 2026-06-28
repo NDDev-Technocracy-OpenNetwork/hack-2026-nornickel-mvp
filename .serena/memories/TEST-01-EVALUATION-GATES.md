@@ -1,6 +1,6 @@
 <!-- Memory Metadata
-Last updated: 2026-06-28
-Last commit: 5dfba92 fix: validate uploaded source file extensions
+Last updated: 2026-06-29
+Last commit: 5f6f8f2 chore: type ask filters for /qa ask requests
 Scope: Makefile; tests/; scripts/run_eval.py; eval/; .github/workflows/ci.yml
 Area: TEST
 -->
@@ -38,6 +38,9 @@ Non-negotiable demo gates are `unsupported_claim_count = 0` and `source_label_le
 
 Regression coverage includes source upload/evidence listing, thread-safe first repository build,
 and preservation of seeded source facts when an overlapping CSV is uploaded.
+Additional coverage added for `/qa/ask` filter parsing:
+- scalar filter values are accepted (auto-coerced to single-element lists);
+- unknown filter keys are rejected with 422 validation errors.
 
 ## Invariants
 
