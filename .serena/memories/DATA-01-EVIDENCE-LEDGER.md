@@ -1,6 +1,6 @@
 <!-- Memory Metadata
-Last updated: 2026-06-28
-Last commit: 5dfba92 fix: validate uploaded source file extensions
+Last updated: 2026-06-29
+Last commit: 832fee9 fix: apply QA filters for source and metadata matching
 Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/; src/nornikel_kg/services/qa_service.py; src/nornikel_kg/services/runtime.py; sample_docs/synthetic/; eval/
 Area: DATA
 -->
@@ -47,6 +47,10 @@ CSV uploads must include `experiment_id`, `material`, `regime`, `temperature_c`,
 `atmosphere`, `property`, `method`, `baseline_value`, `treated_value`, `unit`, and `effect`.
 Uploaded rows become `table_row` evidence spans plus source-scoped measurements/effects. Markdown
 or text uploads are stored as evidence spans without deriving measurements in P0.
+
+`DemoQAService` now applies `AskRequest.filters` before ranking experiments; filtered
+queries can constrain by `source_ids`, `material`/`material_name`, `property`/`property_name`,
+`regime`/`regime_id`, and other stable keys from experiment metadata.
 
 ## Contracts And Data
 

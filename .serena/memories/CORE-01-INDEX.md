@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: f747194 chore(docs): add project instruction docs
+Last commit: 832fee9 fix: apply QA filters for source and metadata matching
 Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml
 Area: CORE
 -->
@@ -52,6 +52,8 @@ evidence cards, graph path, conflict, gap, and evaluation/security metrics. Sour
 React artifact bank -> FastAPI `/sources/upload` -> DuckDB source/evidence/fact writes ->
 `/sources` and `/sources/{source_id}/evidence` listing. Qdrant, Docling/OCR, NetworkX, and
 LiteLLM are prepared as modular next adapters, not yet wired into the scaffold runtime.
+`/qa/ask` honors request filters when selecting experiments, including `source_ids`,
+`material`, and other text filters.
 
 ## Invariants
 

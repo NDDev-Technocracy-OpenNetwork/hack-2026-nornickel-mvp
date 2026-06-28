@@ -1,6 +1,6 @@
 <!-- Memory Metadata
-Last updated: 2026-06-28
-Last commit: 5dfba92 fix: validate uploaded source file extensions
+Last updated: 2026-06-29
+Last commit: 832fee9 fix: apply QA filters for source and metadata matching
 Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; docs/deployment/fa-nddev.md; tests/
 Area: TECHDEBT
 -->
@@ -32,6 +32,8 @@ The scaffold is a working evidence-led product shell backed by a DuckDB ledger. 
 synthetic Ni-Cu corpus and supports CSV/Markdown upload into source/evidence/fact tables. It does
 not yet parse arbitrary uploaded PDFs/DOCX/PPTX/XLSX/images, does not build Qdrant indexes, and
 does not call LiteLLM for extraction or answer writing.
+QA requests now support filter-aware experiment selection with fallback behavior aligned
+to filtered result sets.
 
 FastAPI tests pass but emit a Starlette deprecation warning that `fastapi.testclient` currently
 uses `httpx` and may require `httpx2` in a future dependency cycle.
