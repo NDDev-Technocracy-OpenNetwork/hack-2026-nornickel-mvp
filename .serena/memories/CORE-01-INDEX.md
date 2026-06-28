@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 259ecc6 feat: add react evidence workbench
+Last commit: 1ad13b2 chore: add ci docker docs and memory sync
 Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml
 Area: CORE
 -->
@@ -32,6 +32,8 @@ Index the durable project knowledge for the Nornikel Materials KG Search hackath
 - `mem:SEC-01-ACL-AND-PROMPT-INJECTION`: source-label filtering, prompt-injection, and internal-document safety invariants.
 - `mem:TEST-01-EVALUATION-GATES`: required checks, metrics, and acceptance gates.
 - `mem:DOCS-01-PLANNING-SOURCE`: planning-doc ownership and current scaffold status.
+- `mem:RELEASE-01-VALIDATION`: validation, CI, Compose, browser proof, and deployment checks.
+- `mem:TECHDEBT-01-NOW`: verified current scaffold gaps and migration triggers.
 
 ## Current Behavior
 
