@@ -41,6 +41,7 @@ qdrant_storage/
 .serena/diagnostics/
 .serena/project.local.yml
 .serena/.onboarding
+.serena/.auto_sync_head
 .serena/.serena_sync_state.json
 .serena/.locks/
 .serena/.state/

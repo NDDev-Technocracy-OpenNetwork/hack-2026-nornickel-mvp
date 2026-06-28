@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 259ecc6 feat: add react evidence workbench
+Last commit: d60d647 fix: resolve runtime project root in containers
 Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/; src/nornikel_kg/services/qa_service.py; src/nornikel_kg/services/runtime.py; sample_docs/synthetic/; eval/
 Area: DATA
 -->
@@ -32,7 +32,7 @@ Capture evidence identity, artifact memory, scientific schemas, and answer-claim
 
 ## Current Behavior
 
-The implemented scaffold writes a synthetic DuckDB evidence ledger with `sources`, `evidence_spans`, `property_measurements`, `effect_claims`, and `answer_claims`. Runtime seeding happens through `get_ledger_repository()` using `DUCKDB_PATH` and `SYNTHETIC_SAMPLE_DIR`, defaulting to `data/catalog.duckdb` and `sample_docs/synthetic`.
+The implemented scaffold writes a synthetic DuckDB evidence ledger with `sources`, `evidence_spans`, `property_measurements`, `effect_claims`, and `answer_claims`. Runtime seeding happens through `get_ledger_repository()` using `PROJECT_ROOT`, `DUCKDB_PATH`, and `SYNTHETIC_SAMPLE_DIR`, defaulting to `data/catalog.duckdb` and `sample_docs/synthetic`. Container runtime sets `PROJECT_ROOT=/app`; local runtime falls back to the current working directory when `sample_docs/` exists.
 
 ## Contracts And Data
 
