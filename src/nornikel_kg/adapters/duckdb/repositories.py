@@ -2,15 +2,42 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import io
 import json
+import re
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import duckdb
 from nornikel_kg.domain.evidence import EvidenceSpanFactory
 from nornikel_kg.domain.ids import claim_id, fact_id, source_id_from_bytes
 from nornikel_kg.domain.ledger import EvidenceLedgerPacket
-from nornikel_kg.domain.models import EffectClaim, EvidenceSpan, PropertyMeasurement
+from nornikel_kg.domain.models import (
+    EffectClaim,
+    EffectDirection,
+    EvidenceSpan,
+    ExperimentRow,
+    PropertyMeasurement,
+    SourceIngestResponse,
+    SourceSummary,
+)
+
+CSV_REQUIRED_COLUMNS = {
+    "experiment_id",
+    "material",
+    "regime",
+    "temperature_c",
+    "duration_h",
+    "atmosphere",
+    "property",
+    "method",
+    "baseline_value",
+    "treated_value",
+    "unit",
+    "effect",
+}
+
+EFFECT_DIRECTIONS = {"increase", "decrease", "no_change", "mixed", "unknown"}
 
 
 class DuckDBLedgerRepository:
@@ -24,6 +51,11 @@ class DuckDBLedgerRepository:
         with duckdb.connect(str(self.db_path)) as connection:
             for migration_path in sorted(self.migrations_dir.glob("*.sql")):
                 connection.execute(migration_path.read_text(encoding="utf-8"))
+            self._ensure_column(connection, "sources", "document_type", "TEXT DEFAULT 'report'")
+            self._ensure_column(connection, "property_measurements", "source_id", "TEXT")
+            self._ensure_column(connection, "effect_claims", "source_id", "TEXT")
+            self._ensure_column(connection, "effect_claims", "material_name", "TEXT")
+            self._ensure_column(connection, "effect_claims", "regime_summary", "TEXT")
 
     def seed_synthetic_fixture(self, sample_dir: Path) -> EvidenceLedgerPacket:
         self.migrate()
@@ -33,51 +65,104 @@ class DuckDBLedgerRepository:
         report_bytes = report_path.read_bytes()
         source_id = source_id_from_bytes(report_bytes + b"\n---\n" + csv_bytes)
         raw_sha256 = hashlib.sha256(report_bytes + csv_bytes).hexdigest()
-
-        table_span, conflict_span = self._build_synthetic_spans(
-            source_id=source_id,
-            csv_path=csv_path,
-            report_path=report_path,
-        )
-        measurement = self._build_measurement(table_span)
-        effect = self._build_effect(measurement, table_span)
+        rows = self._parse_csv_rows(csv_bytes)
 
         with duckdb.connect(str(self.db_path)) as connection:
-            connection.execute("DELETE FROM sources WHERE source_id = ?", [source_id])
-            connection.execute("DELETE FROM evidence_spans WHERE source_id = ?", [source_id])
-            connection.execute(
-                "DELETE FROM property_measurements WHERE measurement_id = ?",
-                [measurement.measurement_id],
+            self._delete_source_records(connection, source_id)
+            self._register_source(
+                connection,
+                source_id=source_id,
+                title="Synthetic Ni-Cu aging report",
+                document_type="report+table",
+                raw_sha256=raw_sha256,
+                security_label="internal",
             )
-            connection.execute("DELETE FROM effect_claims WHERE effect_id = ?", [effect.effect_id])
-            connection.execute(
-                """
-                INSERT INTO sources (source_id, title, raw_sha256, security_label)
-                VALUES (?, ?, ?, ?)
-                """,
-                [source_id, "Synthetic Ni-Cu aging report", raw_sha256, "internal"],
+            self._insert_csv_rows(
+                connection,
+                source_id=source_id,
+                rows=rows,
+                artifact_locator=str(csv_path),
+                parser_profile="synthetic_fixture_v1",
+                first_row_ordinal=3,
             )
-            self._insert_evidence_span(connection, table_span)
-            self._insert_evidence_span(connection, conflict_span)
-            self._insert_measurement(connection, measurement)
-            self._insert_effect(connection, effect)
+            self._insert_markdown_evidence(
+                connection,
+                source_id=source_id,
+                text=report_path.read_text(encoding="utf-8"),
+                artifact_locator=str(report_path),
+                parser_profile="synthetic_fixture_v1",
+                selected_lines=(
+                    "method mismatch prevents direct numeric comparison",
+                    "not measured",
+                ),
+            )
 
         return self.load_demo_packet()
 
-    def load_demo_packet(self) -> EvidenceLedgerPacket:
+    def ingest_source_bytes(
+        self,
+        *,
+        filename: str,
+        content: bytes,
+        title: str | None = None,
+    ) -> SourceIngestResponse:
+        self.migrate()
+        source_id = source_id_from_bytes(content)
+        raw_sha256 = hashlib.sha256(content).hexdigest()
+        document_type = self._document_type_from_filename(filename)
+        warnings: list[str] = []
+
         with duckdb.connect(str(self.db_path)) as connection:
-            source_row = connection.execute(
+            self._delete_source_records(connection, source_id)
+            self._register_source(
+                connection,
+                source_id=source_id,
+                title=title or filename,
+                document_type=document_type,
+                raw_sha256=raw_sha256,
+                security_label="internal",
+            )
+            if document_type == "table":
+                rows = self._parse_csv_rows(content)
+                warnings.extend(self._validate_csv_columns(rows))
+                if not warnings:
+                    self._insert_csv_rows(
+                        connection,
+                        source_id=source_id,
+                        rows=rows,
+                        artifact_locator=filename,
+                        parser_profile="csv_table_v1",
+                        first_row_ordinal=1,
+                    )
+            else:
+                self._insert_markdown_evidence(
+                    connection,
+                    source_id=source_id,
+                    text=content.decode("utf-8", errors="replace"),
+                    artifact_locator=filename,
+                    parser_profile="markdown_text_v1",
+                    selected_lines=(),
+                )
+
+        source = next(item for item in self.list_sources() if item.source_id == source_id)
+        return SourceIngestResponse(
+            source=source,
+            evidence_count=source.evidence_count,
+            measurement_count=source.measurement_count,
+            warnings=warnings,
+        )
+
+    def load_demo_packet(self) -> EvidenceLedgerPacket:
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            source_rows = connection.execute(
                 """
                 SELECT source_id, title
                 FROM sources
-                WHERE title = 'Synthetic Ni-Cu aging report'
-                ORDER BY created_at DESC
-                LIMIT 1
+                ORDER BY created_at DESC, title
                 """
-            ).fetchone()
-            if source_row is None:
-                raise LookupError("Synthetic evidence ledger is empty. Seed fixtures first.")
-
+            ).fetchall()
+            source_titles = {str(row[0]): str(row[1]) for row in source_rows}
             evidence_rows = connection.execute(
                 """
                 SELECT
@@ -92,13 +177,10 @@ class DuckDBLedgerRepository:
                   evidence_confidence,
                   security_label
                 FROM evidence_spans
-                WHERE source_id = ?
-                ORDER BY page NULLS LAST, span_type DESC
-                """,
-                [source_row[0]],
+                ORDER BY source_id, page NULLS LAST, span_type DESC, span_id
+                """
             ).fetchall()
-            evidence = [self._evidence_from_row(row) for row in evidence_rows]
-            measurement_row = connection.execute(
+            measurement_rows = connection.execute(
                 """
                 SELECT
                   measurement_id,
@@ -112,11 +194,10 @@ class DuckDBLedgerRepository:
                   supporting_span_ids_json,
                   validation_status
                 FROM property_measurements
-                ORDER BY measurement_id
-                LIMIT 1
+                ORDER BY experiment_id, measurement_id
                 """
-            ).fetchone()
-            effect_row = connection.execute(
+            ).fetchall()
+            effect_rows = connection.execute(
                 """
                 SELECT
                   effect_id,
@@ -133,147 +214,349 @@ class DuckDBLedgerRepository:
                   qualitative_only,
                   qualitative_summary
                 FROM effect_claims
-                ORDER BY effect_id
-                LIMIT 1
+                ORDER BY experiment_id, effect_id
                 """
-            ).fetchone()
-            if measurement_row is None or effect_row is None:
-                raise LookupError("Synthetic evidence ledger is missing facts.")
+            ).fetchall()
+            experiment_rows = connection.execute(
+                """
+                SELECT
+                  m.measurement_id,
+                  m.experiment_id,
+                  m.property_id,
+                  m.property_name,
+                  m.value,
+                  m.unit,
+                  m.validation_status,
+                  e.material_id,
+                  e.material_name,
+                  e.regime_id,
+                  e.regime_summary,
+                  e.direction,
+                  e.delta_value,
+                  e.delta_unit,
+                  e.supporting_span_ids_json
+                FROM property_measurements m
+                JOIN effect_claims e
+                  ON m.experiment_id = e.experiment_id
+                 AND m.property_id = e.property_id
+                ORDER BY m.experiment_id, m.measurement_id
+                """
+            ).fetchall()
+
+        evidence = [self._evidence_from_row(row) for row in evidence_rows]
+        measurements = [self._measurement_from_row(row) for row in measurement_rows]
+        effects = [self._effect_from_row(row) for row in effect_rows]
+        experiments = [self._experiment_from_row(row) for row in experiment_rows]
+        if not measurements or not effects:
+            raise LookupError(
+                "Evidence ledger has no measurements or effect claims. Seed fixtures first."
+            )
 
         return EvidenceLedgerPacket(
             evidence=evidence,
-            measurement=self._measurement_from_row(measurement_row),
-            effect=self._effect_from_row(effect_row),
-            source_title=str(source_row[1]),
+            measurements=measurements,
+            effects=effects,
+            experiments=experiments,
+            source_titles=source_titles,
+            conflicts=self._build_conflicts(evidence),
+            gaps=self._build_gaps(evidence, experiments),
         )
 
-    def list_sources(self) -> list[dict[str, Any]]:
-        if not self.db_path.exists():
-            return []
+    def list_sources(self) -> list[SourceSummary]:
+        self.migrate()
         with duckdb.connect(str(self.db_path)) as connection:
             rows = connection.execute(
                 """
-                SELECT source_id, title, security_label
-                FROM sources
-                ORDER BY created_at DESC
+                SELECT
+                  s.source_id,
+                  s.title,
+                  s.document_type,
+                  s.security_label,
+                  COUNT(DISTINCT ev.span_id) AS evidence_count,
+                  COUNT(DISTINCT pm.measurement_id) AS measurement_count
+                FROM sources s
+                LEFT JOIN evidence_spans ev ON ev.source_id = s.source_id
+                LEFT JOIN property_measurements pm ON pm.source_id = s.source_id
+                GROUP BY s.source_id, s.title, s.document_type, s.security_label, s.created_at
+                ORDER BY s.created_at DESC, s.title
                 """
             ).fetchall()
         return [
-            {
-                "source_id": str(row[0]),
-                "title": str(row[1]),
-                "document_type": "report",
-                "security_label": str(row[2]),
-                "status": "ledger",
-            }
+            SourceSummary(
+                source_id=str(row[0]),
+                title=str(row[1]),
+                document_type=str(row[2]),
+                security_label=row[3],
+                status="ledger",
+                evidence_count=int(row[4]),
+                measurement_count=int(row[5]),
+            )
             for row in rows
         ]
 
-    def _build_synthetic_spans(
+    def list_evidence_spans(self, source_id: str | None = None) -> list[EvidenceSpan]:
+        self.migrate()
+        where_clause = "WHERE source_id = ?" if source_id else ""
+        params: list[str] = [source_id] if source_id else []
+        with duckdb.connect(str(self.db_path)) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT
+                  span_id,
+                  source_id,
+                  artifact_id,
+                  span_type,
+                  visible_text,
+                  page,
+                  locator_json,
+                  validation_status,
+                  evidence_confidence,
+                  security_label
+                FROM evidence_spans
+                {where_clause}
+                ORDER BY source_id, page NULLS LAST, span_type DESC, span_id
+                """,
+                params,
+            ).fetchall()
+        return [self._evidence_from_row(row) for row in rows]
+
+    def _ensure_column(
         self,
+        connection: duckdb.DuckDBPyConnection,
+        table_name: str,
+        column_name: str,
+        column_type: str,
+    ) -> None:
+        existing = {
+            str(row[1])
+            for row in connection.execute(f"PRAGMA table_info('{table_name}')").fetchall()
+        }
+        if column_name not in existing:
+            connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+
+    def _delete_source_records(
+        self,
+        connection: duckdb.DuckDBPyConnection,
+        source_id: str,
+    ) -> None:
+        connection.execute("DELETE FROM property_measurements WHERE source_id = ?", [source_id])
+        connection.execute("DELETE FROM effect_claims WHERE source_id = ?", [source_id])
+        connection.execute("DELETE FROM evidence_spans WHERE source_id = ?", [source_id])
+        connection.execute("DELETE FROM sources WHERE source_id = ?", [source_id])
+
+    def _register_source(
+        self,
+        connection: duckdb.DuckDBPyConnection,
         *,
         source_id: str,
-        csv_path: Path,
-        report_path: Path,
-    ) -> tuple[EvidenceSpan, EvidenceSpan]:
-        with csv_path.open(newline="", encoding="utf-8") as file:
-            rows = list(csv.DictReader(file))
-        primary = rows[0]
-        table_text = (
-            f"Sample {primary['material']}-A | Aging {primary['temperature_c']} C | "
-            f"{primary['duration_h']} h | {primary['atmosphere']} | "
-            f"{primary['property']} {primary['method']} | "
-            f"baseline {primary['baseline_value']} {primary['unit']} | "
-            f"aged {primary['treated_value']} {primary['unit']}"
+        title: str,
+        document_type: str,
+        raw_sha256: str,
+        security_label: str,
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO sources (source_id, title, document_type, raw_sha256, security_label)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [source_id, title, document_type, raw_sha256, security_label],
         )
-        report_text = report_path.read_text(encoding="utf-8")
-        conflict_text = next(
-            line.strip()
-            for line in report_text.splitlines()
-            if "method mismatch prevents direct numeric comparison" in line
-        )
-        return (
-            self.evidence_factory.create(
+
+    def _parse_csv_rows(self, content: bytes) -> list[dict[str, str]]:
+        text = content.decode("utf-8-sig")
+        return [dict(row) for row in csv.DictReader(io.StringIO(text))]
+
+    def _validate_csv_columns(self, rows: list[dict[str, str]]) -> list[str]:
+        if not rows:
+            return ["CSV source has no data rows."]
+        missing = sorted(CSV_REQUIRED_COLUMNS.difference(rows[0].keys()))
+        if missing:
+            return [f"CSV source is missing required columns: {', '.join(missing)}."]
+        return []
+
+    def _insert_csv_rows(
+        self,
+        connection: duckdb.DuckDBPyConnection,
+        *,
+        source_id: str,
+        rows: list[dict[str, str]],
+        artifact_locator: str,
+        parser_profile: str,
+        first_row_ordinal: int,
+    ) -> None:
+        warnings = self._validate_csv_columns(rows)
+        if warnings:
+            return
+
+        for index, row in enumerate(rows):
+            row_ordinal = first_row_ordinal + index
+            material_name = row["material"].strip()
+            material_id = self._material_id(material_name)
+            regime_type = row["regime"].strip().lower()
+            temperature_c = self._parse_float(row["temperature_c"])
+            duration_h = self._parse_float(row["duration_h"])
+            atmosphere = row["atmosphere"].strip()
+            regime_id = self._regime_id(regime_type, temperature_c, duration_h, atmosphere)
+            regime_summary = self._regime_summary(
+                regime_type,
+                temperature_c,
+                duration_h,
+                atmosphere,
+            )
+            property_raw = row["property"].strip()
+            property_id = self._property_id(property_raw, row["method"])
+            property_name = self._property_name(property_raw, row["method"])
+            baseline_value = self._parse_float(row["baseline_value"])
+            treated_value = self._parse_float(row["treated_value"])
+            unit = row["unit"].strip()
+            direction = row["effect"].strip().lower()
+            if direction not in EFFECT_DIRECTIONS:
+                direction = "unknown"
+            effect_direction = cast(EffectDirection, direction)
+            delta_value = None
+            if treated_value is not None and baseline_value is not None:
+                delta_value = round(treated_value - baseline_value, 6)
+            experiment_id = row["experiment_id"].strip() or fact_id("experiment", row)
+            table_text = self._table_row_text(
+                row=row,
+                material_name=material_name,
+                baseline_value=baseline_value,
+                treated_value=treated_value,
+                unit=unit,
+            )
+            table_span = self.evidence_factory.create(
                 source_id=source_id,
                 artifact_type="table",
-                parser_profile="synthetic_fixture_v1",
-                artifact_locator=str(csv_path),
+                parser_profile=parser_profile,
+                artifact_locator=artifact_locator,
                 span_type="table_row",
                 visible_text=table_text,
                 page=2,
-                stable_locator="table_001:row_003",
+                stable_locator=f"table_001:row_{row_ordinal:03d}",
                 validation_status="validated_rule",
                 evidence_confidence=1.0,
                 security_label="internal",
-            ),
-            self.evidence_factory.create(
+            )
+            measurement = PropertyMeasurement(
+                measurement_id=fact_id(
+                    "measurement",
+                    {
+                        "experiment_id": experiment_id,
+                        "property": property_id,
+                        "value": treated_value,
+                        "unit": unit,
+                    },
+                ),
+                experiment_id=experiment_id,
+                property_id=property_id,
+                property_name=property_name,
+                value=treated_value,
+                unit=unit,
+                original_value=f"{treated_value:g} {unit}" if treated_value is not None else None,
+                method=row["method"].strip(),
+                supporting_span_ids=[table_span.span_id],
+            )
+            effect = EffectClaim(
+                effect_id=claim_id(
+                    {
+                        "experiment_id": experiment_id,
+                        "direction": direction,
+                        "supporting_span_ids": measurement.supporting_span_ids,
+                    }
+                ),
+                experiment_id=experiment_id,
+                material_id=material_id,
+                regime_id=regime_id,
+                property_id=property_id,
+                direction=effect_direction,
+                baseline_measurement_id=f"{measurement.measurement_id}_baseline",
+                treated_measurement_id=measurement.measurement_id,
+                delta_value=delta_value,
+                delta_unit=unit,
+                qualitative_summary=self._effect_summary(
+                    material_name=material_name,
+                    regime_summary=regime_summary,
+                    property_name=property_name,
+                    direction=direction,
+                    treated_value=treated_value,
+                    delta_value=delta_value,
+                    unit=unit,
+                ),
+                supporting_span_ids=[table_span.span_id],
+            )
+
+            self._delete_fact_records(connection, measurement.measurement_id, effect.effect_id)
+            self._insert_evidence_span(connection, table_span)
+            self._insert_measurement(connection, measurement, source_id=source_id)
+            self._insert_effect(
+                connection,
+                effect,
+                source_id=source_id,
+                material_name=material_name,
+                regime_summary=regime_summary,
+            )
+
+    def _insert_markdown_evidence(
+        self,
+        connection: duckdb.DuckDBPyConnection,
+        *,
+        source_id: str,
+        text: str,
+        artifact_locator: str,
+        parser_profile: str,
+        selected_lines: tuple[str, ...],
+    ) -> None:
+        lines = [
+            line.strip()
+            for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        if selected_lines:
+            lines = [
+                line
+                for line in lines
+                if any(selected_line in line for selected_line in selected_lines)
+            ]
+
+        for index, line in enumerate(lines, start=2):
+            stable_locator = (
+                "section:discussion:block_002"
+                if "method mismatch prevents direct numeric comparison" in line
+                else f"section:text:block_{index:03d}"
+            )
+            span = self.evidence_factory.create(
                 source_id=source_id,
                 artifact_type="text",
-                parser_profile="synthetic_fixture_v1",
-                artifact_locator=str(report_path),
+                parser_profile=parser_profile,
+                artifact_locator=artifact_locator,
                 span_type="text",
-                visible_text=conflict_text,
+                visible_text=line,
                 page=3,
-                stable_locator="section:discussion:block_002",
+                stable_locator=stable_locator,
                 validation_status="validated_rule",
                 evidence_confidence=0.98,
                 security_label="internal",
-            ),
-        )
+            )
+            self._insert_evidence_span(connection, span)
 
-    def _build_measurement(self, table_span: EvidenceSpan) -> PropertyMeasurement:
-        measurement_id = fact_id(
-            "measurement",
-            {
-                "experiment_id": "exp_nicu_aging_700c_8h",
-                "property": "vickers_hardness",
-                "value": 245,
-                "unit": "HV",
-            },
-        )
-        return PropertyMeasurement(
-            measurement_id=measurement_id,
-            experiment_id="exp_nicu_aging_700c_8h",
-            property_id="prop_vickers_hardness",
-            property_name="Твердость по Виккерсу",
-            value=245,
-            unit="HV",
-            original_value="245 HV",
-            method="Vickers HV10",
-            supporting_span_ids=[table_span.span_id],
-        )
-
-    def _build_effect(
+    def _delete_fact_records(
         self,
-        measurement: PropertyMeasurement,
-        table_span: EvidenceSpan,
-    ) -> EffectClaim:
-        return EffectClaim(
-            effect_id=claim_id(
-                {
-                    "experiment_id": measurement.experiment_id,
-                    "direction": "increase",
-                    "supporting_span_ids": measurement.supporting_span_ids,
-                }
-            ),
-            experiment_id=measurement.experiment_id,
-            material_id="mat_nicu_30",
-            regime_id="reg_aging_700c_8h_air",
-            property_id=measurement.property_id,
-            direction="increase",
-            baseline_measurement_id="meas_nicu_baseline_hv",
-            treated_measurement_id=measurement.measurement_id,
-            delta_value=35,
-            delta_unit="HV",
-            qualitative_summary="Старение при 700 C в течение 8 ч повысило твердость Ni-30Cu.",
-            supporting_span_ids=[table_span.span_id],
+        connection: duckdb.DuckDBPyConnection,
+        measurement_id: str,
+        effect_id: str,
+    ) -> None:
+        connection.execute(
+            "DELETE FROM property_measurements WHERE measurement_id = ?",
+            [measurement_id],
         )
+        connection.execute("DELETE FROM effect_claims WHERE effect_id = ?", [effect_id])
 
     def _insert_evidence_span(
         self,
         connection: duckdb.DuckDBPyConnection,
         span: EvidenceSpan,
     ) -> None:
+        connection.execute("DELETE FROM evidence_spans WHERE span_id = ?", [span.span_id])
         connection.execute(
             """
             INSERT INTO evidence_spans (
@@ -308,11 +591,14 @@ class DuckDBLedgerRepository:
         self,
         connection: duckdb.DuckDBPyConnection,
         measurement: PropertyMeasurement,
+        *,
+        source_id: str,
     ) -> None:
         connection.execute(
             """
             INSERT INTO property_measurements (
               measurement_id,
+              source_id,
               experiment_id,
               property_id,
               property_name,
@@ -323,10 +609,11 @@ class DuckDBLedgerRepository:
               supporting_span_ids_json,
               validation_status
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 measurement.measurement_id,
+                source_id,
                 measurement.experiment_id,
                 measurement.property_id,
                 measurement.property_name,
@@ -339,14 +626,25 @@ class DuckDBLedgerRepository:
             ],
         )
 
-    def _insert_effect(self, connection: duckdb.DuckDBPyConnection, effect: EffectClaim) -> None:
+    def _insert_effect(
+        self,
+        connection: duckdb.DuckDBPyConnection,
+        effect: EffectClaim,
+        *,
+        source_id: str,
+        material_name: str,
+        regime_summary: str,
+    ) -> None:
         connection.execute(
             """
             INSERT INTO effect_claims (
               effect_id,
+              source_id,
               experiment_id,
               material_id,
+              material_name,
               regime_id,
+              regime_summary,
               property_id,
               direction,
               supporting_span_ids_json,
@@ -357,13 +655,16 @@ class DuckDBLedgerRepository:
               qualitative_only,
               qualitative_summary
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 effect.effect_id,
+                source_id,
                 effect.experiment_id,
                 effect.material_id,
+                material_name,
                 effect.regime_id,
+                regime_summary,
                 effect.property_id,
                 effect.direction,
                 json.dumps(effect.supporting_span_ids, ensure_ascii=False),
@@ -420,3 +721,187 @@ class DuckDBLedgerRepository:
             qualitative_only=bool(row[11]),
             qualitative_summary=str(row[12]),
         )
+
+    def _experiment_from_row(self, row: tuple[Any, ...]) -> ExperimentRow:
+        evidence_ids = json.loads(str(row[14]))
+        return ExperimentRow(
+            experiment_id=str(row[1]),
+            material_id=str(row[7]),
+            material_name=str(row[8]),
+            regime_id=str(row[9]),
+            regime_summary=str(row[10]),
+            property_id=str(row[2]),
+            property_name=str(row[3]),
+            measurement={
+                "value": None if row[4] is None else float(row[4]),
+                "unit": None if row[5] is None else str(row[5]),
+                "delta_value": None if row[12] is None else float(row[12]),
+                "delta_unit": None if row[13] is None else str(row[13]),
+                "effect_direction": str(row[11]),
+            },
+            evidence_ids=evidence_ids,
+            validation_status=row[6],
+        )
+
+    def _build_conflicts(self, evidence: list[EvidenceSpan]) -> list[dict[str, object]]:
+        conflicts: list[dict[str, object]] = []
+        method_spans = [
+            span
+            for span in evidence
+            if "method mismatch prevents direct numeric comparison" in span.visible_text
+        ]
+        if method_spans:
+            conflicts.append(
+                {
+                    "conflict_group_id": "conf_nicu_hardness_method",
+                    "type": "method_mismatch",
+                    "summary": (
+                        "Похожий режим в соседнем источнике измерен другим методом, "
+                        "поэтому не сравнивается напрямую с HV."
+                    ),
+                    "supporting_span_ids": [span.span_id for span in method_spans],
+                }
+            )
+        return conflicts
+
+    def _build_gaps(
+        self,
+        evidence: list[EvidenceSpan],
+        experiments: list[ExperimentRow],
+    ) -> list[dict[str, object]]:
+        has_conductivity = any(
+            "conductivity" in experiment.property_name.lower()
+            or "электропровод" in experiment.property_name.lower()
+            for experiment in experiments
+        )
+        near_miss_ids = [
+            span.span_id
+            for span in evidence
+            if "not measured" in span.visible_text.lower()
+            or "электропровод" in span.visible_text.lower()
+            or span.span_type == "table_row"
+        ]
+        if has_conductivity or not near_miss_ids:
+            return []
+        return [
+            {
+                "gap_id": "gap_nicu_conductivity_aging_700c",
+                "type": "missing_measurement",
+                "description": (
+                    "Для Ni-Cu после старения 700 C / 8 ч нет валидированного "
+                    "измерения электропроводности в доступном ledger."
+                ),
+                "near_miss_evidence_span_ids": near_miss_ids[:3],
+            }
+        ]
+
+    def _document_type_from_filename(self, filename: str) -> str:
+        return "table" if filename.lower().endswith(".csv") else "document"
+
+    def _material_id(self, material_name: str) -> str:
+        normalized = material_name.lower().replace(" ", "")
+        known = {
+            "ni-30cu": "mat_nicu_30",
+            "nicu30": "mat_nicu_30",
+            "cuni30": "mat_cuni_30",
+            "cu-ni30": "mat_cuni_30",
+        }
+        return known.get(normalized, f"mat_{self._slug(material_name)}")
+
+    def _property_id(self, property_raw: str, method: str) -> str:
+        lowered = f"{property_raw} {method}".lower()
+        if "vickers" in lowered:
+            return "prop_vickers_hardness"
+        if "rockwell" in lowered:
+            return "prop_rockwell_hardness"
+        if "conductivity" in lowered or "электропровод" in lowered:
+            return "prop_conductivity"
+        return f"prop_{self._slug(property_raw)}"
+
+    def _property_name(self, property_raw: str, method: str) -> str:
+        lowered = f"{property_raw} {method}".lower()
+        if "vickers" in lowered:
+            return "Твердость по Виккерсу"
+        if "rockwell" in lowered:
+            return "Твердость по Роквеллу"
+        if "conductivity" in lowered or "электропровод" in lowered:
+            return "Электропроводность"
+        return property_raw
+
+    def _regime_id(
+        self,
+        regime_type: str,
+        temperature_c: float | None,
+        duration_h: float | None,
+        atmosphere: str,
+    ) -> str:
+        temp = "unknown" if temperature_c is None else f"{temperature_c:g}c"
+        duration = "unknown" if duration_h is None else f"{duration_h:g}h"
+        return f"reg_{self._slug(regime_type)}_{temp}_{duration}_{self._slug(atmosphere)}"
+
+    def _regime_summary(
+        self,
+        regime_type: str,
+        temperature_c: float | None,
+        duration_h: float | None,
+        atmosphere: str,
+    ) -> str:
+        regime_ru = {"aging": "Старение", "annealing": "Отжиг"}.get(regime_type, regime_type)
+        temp = "?" if temperature_c is None else f"{temperature_c:g} C"
+        duration = "?" if duration_h is None else f"{duration_h:g} ч"
+        return f"{regime_ru}, {temp}, {duration}, {atmosphere}"
+
+    def _effect_summary(
+        self,
+        *,
+        material_name: str,
+        regime_summary: str,
+        property_name: str,
+        direction: str,
+        treated_value: float | None,
+        delta_value: float | None,
+        unit: str,
+    ) -> str:
+        direction_ru = {
+            "increase": "повысил",
+            "decrease": "снизил",
+            "no_change": "не изменил",
+            "mixed": "дал смешанный эффект на",
+            "unknown": "имеет неизвестный эффект на",
+        }[direction]
+        value = (
+            "без численного значения"
+            if treated_value is None
+            else f"до {treated_value:g} {unit}"
+        )
+        delta = "" if delta_value is None else f" (Δ {delta_value:g} {unit})"
+        return (
+            f"{regime_summary} для {material_name} {direction_ru} "
+            f"{property_name} {value}{delta}."
+        )
+
+    def _table_row_text(
+        self,
+        *,
+        row: dict[str, str],
+        material_name: str,
+        baseline_value: float | None,
+        treated_value: float | None,
+        unit: str,
+    ) -> str:
+        baseline = "unknown" if baseline_value is None else f"{baseline_value:g} {unit}"
+        treated = "unknown" if treated_value is None else f"{treated_value:g} {unit}"
+        return (
+            f"Sample {material_name}-A | {row['regime'].title()} {row['temperature_c']} C | "
+            f"{row['duration_h']} h | {row['atmosphere']} | {row['property']} {row['method']} | "
+            f"baseline {baseline} | treated {treated}"
+        )
+
+    def _parse_float(self, value: str) -> float | None:
+        stripped = value.strip()
+        if not stripped:
+            return None
+        return float(stripped)
+
+    def _slug(self, value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")

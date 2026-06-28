@@ -13,7 +13,26 @@ def test_duckdb_ledger_seeds_synthetic_packet(tmp_path: Path) -> None:
     assert packet.measurement.unit == "HV"
     assert packet.effect.direction == "increase"
     assert packet.evidence[0].span_type == "table_row"
+    assert len(packet.experiments) == 2
+    assert packet.conflicts
+    assert packet.gaps
 
     loaded = repository.load_demo_packet()
     assert loaded.measurement.measurement_id == packet.measurement.measurement_id
     assert loaded.evidence[0].span_id == packet.evidence[0].span_id
+
+
+def test_duckdb_ledger_ingests_uploaded_csv(tmp_path: Path) -> None:
+    repository = DuckDBLedgerRepository(tmp_path / "catalog.duckdb")
+    csv_content = (
+        b"experiment_id,material,regime,temperature_c,duration_h,atmosphere,"
+        b"property,method,baseline_value,treated_value,unit,effect\n"
+        b"exp_upload_nicu,Ni-30Cu,aging,700,8,air,Vickers hardness,HV10,200,230,HV,increase\n"
+    )
+
+    result = repository.ingest_source_bytes(filename="upload.csv", content=csv_content)
+
+    assert result.warnings == []
+    assert result.evidence_count == 1
+    assert result.measurement_count == 1
+    assert repository.list_evidence_spans(result.source.source_id)[0].span_type == "table_row"

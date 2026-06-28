@@ -33,6 +33,23 @@ class EvidenceSpan(BaseModel):
     security_label: SecurityLabel = "internal"
 
 
+class SourceSummary(BaseModel):
+    source_id: str
+    title: str
+    document_type: str
+    security_label: SecurityLabel
+    status: str
+    evidence_count: int = 0
+    measurement_count: int = 0
+
+
+class SourceIngestResponse(BaseModel):
+    source: SourceSummary
+    evidence_count: int
+    measurement_count: int
+    warnings: list[str] = Field(default_factory=list)
+
+
 class Material(BaseModel):
     material_id: str
     canonical_name: str
