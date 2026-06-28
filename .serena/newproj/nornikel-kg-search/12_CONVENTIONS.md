@@ -19,6 +19,9 @@
 - A measurement without unit is invalid.
 - A claim without source span is invalid.
 - An answer without evidence is a "not enough evidence" response, not a generated conclusion.
+- DuckDB is authoritative for P0 facts and provenance; Qdrant is candidate retrieval only.
+- Table rows and table cells are evidence units, not just Markdown text.
+- Generated answer sentences without support IDs are rejected.
 - Canonical graph writes require schema validation.
 - Entity merge requires deterministic rule or reviewer approval.
 

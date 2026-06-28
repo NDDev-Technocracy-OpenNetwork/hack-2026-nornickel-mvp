@@ -39,6 +39,7 @@
 
 - `POST /qa/ask`: answer with evidence, graph paths, conflicts, and gaps.
 - `GET /qa/runs/{run_id}`: replayable retrieval and answer metadata.
+- `GET /qa/runs/{run_id}/claims`: answer claim ledger with support IDs and verification status.
 
 ### Review
 
@@ -76,7 +77,14 @@
 ```json
 {
   "run_id": "qa_run_...",
-  "answer": "...",
+  "answer_summary": [
+    {
+      "sentence": "Aging at 700 C for 8 h increased Vickers hardness for Ni-30Cu in the accessible evidence.",
+      "supporting_span_ids": ["evs_..."],
+      "supporting_fact_ids": ["meas_..."],
+      "graph_path_ids": ["path_..."]
+    }
+  ],
   "confidence": "medium",
   "experiments": [
     {
@@ -112,10 +120,15 @@
   ],
   "graph_paths": [
     {
-      "nodes": ["mat_...", "exp_...", "reg_...", "measure_...", "prop_..."],
-      "relationships": ["USES_MATERIAL", "APPLIES_REGIME", "HAS_MEASUREMENT", "OF_PROPERTY", "SUPPORTED_BY"]
+      "nodes": ["exp_...", "sample_...", "mat_...", "reg_...", "step_...", "measure_...", "prop_...", "span_...", "src_..."],
+      "relationships": ["USES_SAMPLE", "MADE_OF", "APPLIES_REGIME", "HAS_STEP", "HAS_MEASUREMENT", "OF_PROPERTY", "SUPPORTED_BY", "FROM_DOCUMENT"]
     }
   ],
+  "verification": {
+    "citation_coverage": 1.0,
+    "unsupported_claim_count": 0,
+    "acl_leak_count": 0
+  },
   "conflicts": [],
   "gaps": [
     {
@@ -132,3 +145,4 @@
 - Ambiguous material or property returns `409` with candidate entities.
 - Forbidden source access returns `403`; the answer must omit restricted evidence.
 - Missing evidence returns `200` with empty evidence and explicit gaps, not a hallucinated answer.
+- Generated sentences without support IDs are rejected before the final response is returned.

@@ -18,28 +18,28 @@ Consequences:
 - Stronger demo value: answer, evidence, graph, conflicts, and gaps.
 - Requires artifact memory bank discipline so generated Markdown remains traceable to structured source spans.
 
-## ADR-002: Use Neo4j For Canonical Graph
+## ADR-002: Use NetworkX First, Neo4j Later
 
 Status: Proposed
 
-Decision: Use Neo4j for graph storage and Cypher traversal in the MVP.
+Decision: Use DuckDB graph node/edge tables plus NetworkX `MultiDiGraph` for P0 graph paths. Promote to Neo4j only after the evidence loop works and persistent graph queries justify the operational cost.
 
 Rationale:
 
-- Property graph fits material, experiment, regime, measurement, equipment, team, and document relationships.
-- Neo4j GraphRAG tooling supports vector, full-text, hybrid, and Cypher-based retrieval patterns.
-- Cypher is fast to demo and explain to stakeholders.
+- P0 needs explainable answer paths, not a full graph database.
+- NetworkX can materialize answer neighborhoods from DuckDB facts without extra infrastructure.
+- Keeping the `GraphStore` port makes Neo4j adoption straightforward when graph size, Cypher queries, multi-user exploration, or graph analytics become core.
 
 Consequences:
 
 - Neo4j Community licensing must be reviewed before productization because it is GPLv3.
-- Neo4j remains suitable for hackathon/demo use when deployed as a separate graph service and when license constraints are understood.
+- Neo4j remains a P1 adapter, not a P0 blocker.
 
 Alternatives:
 
 - PostgreSQL plus recursive SQL: lower operational cost, weaker graph ergonomics.
 - RDF triple store: strong ontology semantics, slower hackathon iteration.
-- NetworkX only: useful for analytics prototypes, not a persistent multi-user graph.
+- Neo4j from day one: stronger graph tooling but too much infrastructure risk for the hackathon.
 
 ## ADR-003: Use Qdrant For Hybrid Retrieval
 
@@ -59,16 +59,22 @@ Alternatives:
 - pgvector: simpler stack, but less specialized for advanced hybrid retrieval and payload-heavy vector search.
 - Neo4j vector only: fewer services, but mixes graph and retrieval concerns too early.
 
-## ADR-004: Use PostgreSQL For Application State And Audit
+## ADR-004: Use DuckDB As P0 Evidence Ledger
 
 Status: Proposed
 
-Decision: Use PostgreSQL for source registry, jobs, review workflow, users, audit, and reproducibility metadata.
+Decision: Use DuckDB as the P0 system of record for source registry, artifacts, evidence spans, facts, graph node/edge tables, answer claims, evaluation, security checks, and gap analytics.
 
 Rationale:
 
-- These are relational workflow records, not graph facts.
-- PostgreSQL is reliable, familiar, and easy to operate.
+- DuckDB is embedded, fast to ship, and well suited to local analytical workloads.
+- The first product needs a scientific evidence ledger more than a multi-user OLTP service.
+- DuckDB keeps demo setup simple while preserving a clear path to PostgreSQL through `MetadataStore`.
+
+Consequences:
+
+- Qdrant is retrieval-only and cannot be authoritative for facts or provenance.
+- PostgreSQL remains the P1 adapter for multi-user review, audit, and concurrent writes.
 
 ## ADR-005: Use FastAPI For Backend API
 

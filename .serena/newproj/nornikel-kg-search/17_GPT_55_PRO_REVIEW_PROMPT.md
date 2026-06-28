@@ -1,6 +1,6 @@
 # GPT-5.5 Pro Review Prompt
 
-Use this prompt in ChatGPT 5.5 Pro to get an external architecture/product review.
+Use this prompt in ChatGPT 5.5 Pro to get a second-pass implementation-readiness review.
 
 ```text
 You are a senior AI product architect, staff backend engineer, information retrieval specialist, and materials-informatics reviewer.
@@ -23,6 +23,19 @@ It must show:
 Current proposed direction:
 Evidence-first Scientific Knowledge Graph + Hybrid Retrieval.
 
+Current review-integrated correction:
+The primary system is not a chatbot and not a full production KG stack. It is a scientific evidence ledger:
+
+Artifact memory bank
+→ stable EvidenceSpans
+→ table/fact extraction
+→ DuckDB system of record
+→ Qdrant hybrid candidate retrieval
+→ NetworkX graph path rendering
+→ deterministic evidence packet
+→ LLM summary with claim verification
+→ evaluation/security dashboard
+
 Critical MVP correction:
 Do not start with a heavy production stack. Build MVP-lite first:
 - Streamlit workbench for the first UI;
@@ -36,17 +49,31 @@ Do not start with a heavy production stack. Build MVP-lite first:
 Non-negotiable invariant:
 Every final-answer claim must map to an EvidenceSpan: exact source_id, span_id, page/row/image/table metadata, extraction run, validation status, and graph path or indexed retrieval unit.
 
+Identifier policy:
+- source_id: stable raw document identity.
+- artifact_id: parsed object identity.
+- span_id: stable evidence anchor generated from source, artifact type, page/table/row/bbox locator, and visible-content hash.
+- extraction_run_id: mutable parser/extraction run identity.
+- fact_id: normalized extracted fact identity.
+- claim_id: extraction or answer claim identity.
+- extraction_run_id must not be included in span_id.
+
 P0 vertical slice:
 1. Import/upload source files.
 2. Parse into artifact memory bank.
 3. Generate stable EvidenceSpan IDs.
 4. Extract material/regime/property/measurement facts using dictionaries, rules, table extraction, and LLM JSON extraction on small chunks.
 5. Materialize canonical graph path:
-   Material <-[:USES_MATERIAL]- Experiment
+   Experiment -[:USES_SAMPLE]-> Sample
+   Sample -[:MADE_OF]-> Material
+   Material -[:HAS_COMPOSITION]-> MaterialComposition
    Experiment -[:APPLIES_REGIME]-> ProcessingRegime
+   ProcessingRegime -[:HAS_STEP]-> ProcessStep
    Experiment -[:HAS_MEASUREMENT]-> PropertyMeasurement
    PropertyMeasurement -[:OF_PROPERTY]-> Property
    PropertyMeasurement -[:SUPPORTED_BY]-> EvidenceSpan
+   EffectClaim -[:COMPARES_BASELINE]-> PropertyMeasurement
+   EffectClaim -[:COMPARES_TREATED]-> PropertyMeasurement
    EvidenceSpan -[:FROM_DOCUMENT]-> Document
 6. Index Markdown chunks, table rows, claims, and entity/experiment summaries in Qdrant.
 7. Answer material-regime-property questions with experiment table, evidence cards, graph path, conflicts/gaps, and grounded summary.
@@ -110,11 +137,13 @@ Please perform a deep review and produce a rigorous report:
    - What thresholds are good enough?
 
 9. Produce final recommendations:
-   - Must-fix before coding.
+   - Must-fix before coding, if any remain.
    - Should-fix during scaffold.
    - Defer safely.
+   - Check whether `18_IMPLEMENTATION_SPEC.md` is complete enough to scaffold from.
    - Proposed final P0 implementation plan by day/hour.
    - Proposed repository structure.
+   - Any contradiction in the MVP-lite stack or evidence ledger contract.
 
 Be skeptical. Prefer a working, high-quality, modular MVP over an impressive but unbuildable architecture. Do not give generic RAG advice; tailor the answer to materials science, internal documents, experiments, process regimes, properties, evidence spans, and hackathon constraints.
 ```

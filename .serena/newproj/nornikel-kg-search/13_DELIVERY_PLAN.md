@@ -31,6 +31,17 @@ Use the lightest adapter that proves the product contract:
 
 The code must still be written through ports so each adapter can be replaced without changing domain logic.
 
+## Pre-Code Must-Fix Checklist
+
+- Freeze ID policy for `source_id`, `artifact_id`, `span_id`, `extraction_run_id`, `fact_id`, and `claim_id`.
+- Make DuckDB the P0 system of record.
+- Treat table rows and cells as first-class evidence.
+- Define `EffectClaim`, `ConflictGroup`, `DataGap`, and `answer_claims`.
+- Create 10-20 gold questions, including success, conflict, gap, ACL, and prompt-injection cases.
+- Decide LLM/embedding data boundary for internal documents.
+- Enforce ACL filtering before LLM context construction.
+- Make answer output a claim ledger, not a prose blob.
+
 ### Phase 0: Owner Decisions
 
 Before scaffold:
@@ -54,6 +65,7 @@ Deliver:
 - minimal domain schemas;
 - seed dictionaries for materials, equipment, teams, and properties.
 - one synthetic or approved sample corpus that can be committed or safely mounted locally.
+- gold/adversarial question fixtures and expected evidence spans.
 
 ### Phase 2: Ingestion
 
@@ -79,6 +91,7 @@ Deliver:
 - graph path/neighborhood endpoint backed by GraphStore port;
 - experiment/property comparison query;
 - gap detection prototype.
+- answer claim verifier with unsupported-claim blocking.
 
 ### Phase 4: QA And UI
 

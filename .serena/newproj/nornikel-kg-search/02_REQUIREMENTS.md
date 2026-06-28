@@ -12,7 +12,7 @@
 
 ### Knowledge Extraction
 
-- Extract entities: Material, Alloy, Element, Composition, ProcessingRegime, Experiment, Sample, Property, PropertyMeasurement, Equipment, Installation, Team, Person, Lab, Document, EvidenceSpan, Claim, Conclusion, Decision, Gap.
+- Extract entities: Material, Alloy, Element, MaterialComposition, Sample, BatchOrHeat, ProcessingRegime, ProcessStep, Experiment, Property, PropertyMeasurement, EffectClaim, Equipment, Installation, Team, Person, Lab, Document, Table, TableRow, TableCell, Figure, EvidenceSpan, Claim, Conclusion, Decision, ConflictGroup, DataGap.
 - Extract relations with provenance and confidence.
 - Normalize synonyms and aliases, especially alloy names, property names, equipment names, and regime labels.
 - Separate raw extracted claims from validated canonical facts.
@@ -69,7 +69,7 @@ P0:
 - source registry with checksum, security label, parser version, and artifact checksums;
 - dictionary/rule/table-driven extraction for material, regime, property, measurement, and evidence spans;
 - LLM JSON extraction only on small evidence chunks with schema validation;
-- canonical graph path for Material to Experiment to Regime to Measurement to Property to EvidenceSpan;
+- canonical graph path for Experiment to Sample to Material, ProcessingRegime/ProcessStep, PropertyMeasurement, Property, EvidenceSpan, and Document;
 - hybrid retrieval over Markdown chunks, table rows, extracted claims, and entity summaries;
 - answer table with cited evidence and explicit gaps.
 
