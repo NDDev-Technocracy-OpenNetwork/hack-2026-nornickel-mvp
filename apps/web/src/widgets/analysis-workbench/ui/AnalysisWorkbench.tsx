@@ -7,6 +7,7 @@ import {
   listSources,
   deleteSource,
   uploadSource,
+  type AskFilters,
   type AskResponse,
   type SourceSummary,
 } from "@/shared/api";
@@ -21,6 +22,12 @@ export function AnalysisWorkbench() {
   const [artifactError, setArtifactError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sources, setSources] = useState<SourceSummary[]>([]);
+  const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(new Set());
+  const [materialFilter, setMaterialFilter] = useState("");
+  const [propertyFilter, setPropertyFilter] = useState("");
+  const [regimeFilter, setRegimeFilter] = useState("");
+  const [experimentFilter, setExperimentFilter] = useState("");
+  const [regimeIdFilter, setRegimeIdFilter] = useState("");
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
@@ -36,17 +43,89 @@ export function AnalysisWorkbench() {
     }
   }
 
+  useEffect(() => {
+    setSelectedSourceIds((previous) => {
+      const availableIds = new Set(sources.map((source) => source.source_id));
+      const next = new Set(
+        [...previous].filter((sourceId) => availableIds.has(sourceId)),
+      );
+      if (next.size !== previous.size) {
+        return next;
+      }
+      return previous;
+    });
+  }, [sources]);
+
+  function splitFilterList(raw: string): string[] {
+    return raw
+      .split(/[\n,]/)
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+  }
+
+  function buildFilters(): AskFilters {
+    const filters: AskFilters = {};
+
+    if (selectedSourceIds.size > 0) {
+      filters.source_ids = [...selectedSourceIds];
+    }
+
+    const materials = splitFilterList(materialFilter);
+    if (materials.length > 0) {
+      filters.material = materials;
+    }
+
+    const properties = splitFilterList(propertyFilter);
+    if (properties.length > 0) {
+      filters.property = properties;
+    }
+
+    const regimes = splitFilterList(regimeFilter);
+    if (regimes.length > 0) {
+      filters.regime = regimes;
+    }
+
+    const experiments = splitFilterList(experimentFilter);
+    if (experiments.length > 0) {
+      filters.experiment_id = experiments;
+    }
+
+    const regimeIds = splitFilterList(regimeIdFilter);
+    if (regimeIds.length > 0) {
+      filters.regime_id = regimeIds;
+    }
+
+    return filters;
+  }
+
   async function handleSubmit(question: string) {
     setLoading(true);
     setError(null);
     try {
-      setAnswer(await askQuestion(question));
+      setAnswer(await askQuestion(question, buildFilters()));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось выполнить запрос");
     } finally {
       setLoading(false);
     }
   }
+
+  function clearFilters() {
+    setSelectedSourceIds(new Set());
+    setMaterialFilter("");
+    setPropertyFilter("");
+    setRegimeFilter("");
+    setExperimentFilter("");
+    setRegimeIdFilter("");
+  }
+
+  const isFilterActive =
+    selectedSourceIds.size > 0 ||
+    materialFilter.trim().length > 0 ||
+    propertyFilter.trim().length > 0 ||
+    regimeFilter.trim().length > 0 ||
+    experimentFilter.trim().length > 0 ||
+    regimeIdFilter.trim().length > 0;
 
   async function handleUpload(file: File) {
     setUploading(true);
@@ -81,6 +160,93 @@ export function AnalysisWorkbench() {
     <div className="workbench-grid">
       <div className="stack">
         <Panel title="Вопрос исследователя">
+          <div className="qa-filters">
+            <div className="filter-group">
+              <label>Фильтр по источникам</label>
+              <div className="filter-source-list">
+                {sources.map((source) => {
+                  const checked = selectedSourceIds.has(source.source_id);
+                  return (
+                    <label className="filter-source-item" key={source.source_id}>
+                      <input
+                        checked={checked}
+                        onChange={(event) => {
+                          const next = new Set(selectedSourceIds);
+                          if (event.target.checked) {
+                            next.add(source.source_id);
+                          } else {
+                            next.delete(source.source_id);
+                          }
+                          setSelectedSourceIds(next);
+                        }}
+                        type="checkbox"
+                      />
+                      <span>{source.title}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="filter-grid">
+              <label className="filter-text-field">
+                <span>material / material_name</span>
+                <input
+                  onChange={(event) => setMaterialFilter(event.target.value)}
+                  placeholder="Ni-30Cu, CuNi30"
+                  type="text"
+                  value={materialFilter}
+                />
+              </label>
+              <label className="filter-text-field">
+                <span>property / property_name</span>
+                <input
+                  onChange={(event) => setPropertyFilter(event.target.value)}
+                  placeholder="Vickers hardness, Hardness"
+                  type="text"
+                  value={propertyFilter}
+                />
+              </label>
+              <label className="filter-text-field">
+                <span>regime / regime_summary</span>
+                <input
+                  onChange={(event) => setRegimeFilter(event.target.value)}
+                  placeholder="aging 700 C, anneal"
+                  type="text"
+                  value={regimeFilter}
+                />
+              </label>
+              <label className="filter-text-field">
+                <span>experiment_id</span>
+                <input
+                  onChange={(event) => setExperimentFilter(event.target.value)}
+                  placeholder="exp_nicu_aging_700c_8h"
+                  type="text"
+                  value={experimentFilter}
+                />
+              </label>
+              <label className="filter-text-field">
+                <span>regime_id</span>
+                <input
+                  onChange={(event) => setRegimeIdFilter(event.target.value)}
+                  placeholder="reg_aging_700c_8h_air"
+                  type="text"
+                  value={regimeIdFilter}
+                />
+              </label>
+            </div>
+
+            <div className="button-row">
+              <button
+                className="secondary-button"
+                disabled={loading || !isFilterActive}
+                onClick={clearFilters}
+                type="button"
+              >
+                Сбросить фильтры
+              </button>
+            </div>
+          </div>
           <QuestionForm disabled={loading} onSubmit={handleSubmit} />
         </Panel>
 

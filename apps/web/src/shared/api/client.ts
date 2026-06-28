@@ -1,19 +1,44 @@
-import type { AskResponse, SourceIngestResponse, SourceSummary } from "./types";
+import type {
+  AskFilters,
+  AskResponse,
+  SourceIngestResponse,
+  SourceSummary,
+} from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
-export async function askQuestion(question: string): Promise<AskResponse> {
+function hasNonEmptyFilters(filters: AskFilters | undefined): filters is AskFilters {
+  if (!filters) {
+    return false;
+  }
+
+  return Object.values(filters).some((values) => values.length > 0);
+}
+
+export async function askQuestion(question: string, filters?: AskFilters): Promise<AskResponse> {
+  const body: {
+    question: string;
+    language: "ru" | "en";
+    include_graph: boolean;
+    include_gaps: boolean;
+    filters?: AskFilters;
+  } = {
+    question,
+    language: "ru",
+    include_graph: true,
+    include_gaps: true,
+  };
+
+  if (hasNonEmptyFilters(filters)) {
+    body.filters = filters;
+  }
+
   const response = await fetch(`${API_BASE_URL}/qa/ask`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      question,
-      language: "ru",
-      include_graph: true,
-      include_gaps: true,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {

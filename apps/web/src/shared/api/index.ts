@@ -3,6 +3,7 @@ export type {
   AskResponse,
   EvidenceSpan,
   ExperimentRow,
+  AskFilters,
   GraphPath,
   SourceIngestResponse,
   SourceSummary,

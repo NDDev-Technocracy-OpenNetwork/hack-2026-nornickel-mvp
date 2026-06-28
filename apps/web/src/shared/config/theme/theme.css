@@ -201,6 +201,60 @@ button {
   flex-wrap: wrap;
 }
 
+.qa-filters {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.filter-group {
+  display: grid;
+  gap: 8px;
+}
+
+.filter-group > label {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.filter-source-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 14px;
+}
+
+.filter-source-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text);
+}
+
+.filter-source-item input {
+  margin: 0;
+}
+
+.filter-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.filter-text-field {
+  display: grid;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  min-width: 0;
+}
+
+.filter-text-field input {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  min-height: 34px;
+  padding: 0 10px;
+}
+
 .primary-button,
 .secondary-button {
   display: inline-flex;
@@ -498,7 +552,16 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .filter-source-list,
+  .filter-grid {
+    grid-template-columns: 1fr;
+  }
+
   .source-counts {
     justify-items: start;
+  }
+
+  .filter-text-field span {
+    white-space: normal;
   }
 }

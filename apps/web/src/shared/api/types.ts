@@ -67,3 +67,24 @@ export type AskResponse = {
   gaps: Array<Record<string, unknown>>;
   follow_up_queries: string[];
 };
+
+export type AskFilters = {
+  source_ids?: string[];
+  material_name?: string[];
+  property_name?: string[];
+  regime_summary?: string[];
+  experiment_id?: string[];
+  regime_id?: string[];
+  material?: string[];
+  property?: string[];
+  regime?: string[];
+  source_id?: string[];
+};
+
+export type AskRequest = {
+  question: string;
+  language?: "ru" | "en";
+  include_graph?: boolean;
+  include_gaps?: boolean;
+  filters?: AskFilters;
+};
