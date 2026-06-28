@@ -5,7 +5,7 @@
 ### Ingestion
 
 - Register every source document and structured file with stable source ID, checksum, version, confidentiality label, and import timestamp.
-- Parse PDF, DOCX, XLSX/CSV, and JSON-like catalog exports.
+- Parse PDF, DOCX, XLSX/CSV, PPTX, images/scans, and JSON-like catalog exports.
 - Split documents into chunks while preserving section titles, page numbers, table references, and source spans.
 - Import dictionaries for materials, equipment, teams, labs, and topic tags before free-text extraction.
 - Run idempotent ingestion: re-importing the same source must not duplicate canonical facts.
@@ -16,7 +16,7 @@
 - Extract relations with provenance and confidence.
 - Normalize synonyms and aliases, especially alloy names, property names, equipment names, and regime labels.
 - Separate raw extracted claims from validated canonical facts.
-- Support human review for low-confidence or high-impact facts.
+- Show low-confidence or high-impact facts in the extraction workbench; full human review workflows are P1.
 
 ### Search And Analysis
 
@@ -50,7 +50,7 @@
 - Extraction jobs can be asynchronous.
 - Every generated answer must be reproducible from stored retrieval inputs and source IDs.
 - Data model must support future security filters at node, edge, and document level.
-- Local demo must run from Docker Compose.
+- Server demo must run from Docker Compose on `fa.nddev.asia`; local validation can run the same stack or narrower test commands.
 - MVP must have one hardened vertical slice before broad feature work: parse artifacts, search evidence, extract material-regime-property-measurement facts, write graph path, answer with citations, and show gaps.
 
 ## Acceptance Criteria
@@ -65,18 +65,21 @@
 
 P0:
 
+- React/Vite frontend and FastAPI backend;
+- LiteLLM/OpenAI-compatible LLM and embedding providers configured through environment variables;
 - artifact memory bank with Markdown, structured JSON, extracted tables/images, and manifest;
 - source registry with checksum, security label, parser version, and artifact checksums;
 - dictionary/rule/table-driven extraction for material, regime, property, measurement, and evidence spans;
 - LLM JSON extraction only on small evidence chunks with schema validation;
 - canonical graph path for Experiment to Sample to Material, ProcessingRegime/ProcessStep, PropertyMeasurement, Property, EvidenceSpan, and Document;
 - hybrid retrieval over Markdown chunks, table rows, extracted claims, and entity summaries;
-- answer table with cited evidence and explicit gaps.
+- answer table with cited evidence and explicit gaps;
+- one polished ideal demo scenario plus regression fixtures.
 
 P1:
 
 - graph visualization around the answer path;
-- contradiction detector;
+- deeper graph analytics beyond answer-path visualization;
 - review queue;
 - timeline and decision history;
 - parser bakeoff across Docling, GROBID, Unstructured, Marker, and MinerU on hard documents.
@@ -89,21 +92,24 @@ P2:
 - complex ontology expansion;
 - production SSO and external system integrations.
 
-## Owner Decisions Needed
+## Confirmed Owner Decisions
 
-1. MVP priority:
-   - A: question-answering demo first;
-   - B: graph exploration first;
-   - C: extraction/review quality first.
-2. LLM policy:
-   - A: hosted commercial model allowed;
-   - B: only local/on-prem model allowed;
-   - C: no LLM for classified data, only demo data.
-3. Corpus form:
-   - A: static dump of files;
-   - B: live internal systems;
-   - C: synthetic/anonymized sample.
-4. Evaluation:
-   - A: provide 20-50 gold questions;
-   - B: infer evaluation from available corpus;
-   - C: demo-only qualitative validation.
+- Implementation may start.
+- Merge planning work to `main`, then work in logical branches with atomic commits.
+- Use GitHub Actions CI/CD checks in the private repository.
+- Use external APIs through LiteLLM with prepared secret placeholders.
+- Use Docker Compose, `uv`, Python 3.12, Node 24 LTS, React/Vite, and FastAPI.
+- Create synthetic test/demo documents for PDF, DOCX, XLSX, CSV, PPTX, and images/scans.
+- Real internal documents may be used/committed only when owner-provided/approved for this private repository.
+- UI answers are Russian-first.
+- P0 has no user auth/RBAC; use source security labels and provenance only.
+- Deploy to `fa.nddev.asia` via `ssh server-nddev`.
+
+## Demo Scope
+
+P0 should use a focused but extensible synthetic materials scope:
+
+- Material families: Ni-Cu alloys, Ni-Cr-Mo heat-resistant alloys, Cu-Ni corrosion-resistant alloys.
+- Process regimes: annealing, aging, cold rolling, solution treatment plus quench, welding/cladding.
+- Properties: Vickers hardness, tensile strength, elongation, electrical conductivity, corrosion rate, grain size, porosity/cracking, phase fraction.
+- Fixtures should include at least one contradiction, one data gap, one table-backed numeric answer, one figure/image evidence card, and one prompt-injection-like adversarial span.

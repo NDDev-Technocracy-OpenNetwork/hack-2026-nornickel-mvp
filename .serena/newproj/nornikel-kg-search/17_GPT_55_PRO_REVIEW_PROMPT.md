@@ -37,14 +37,15 @@ Artifact memory bank
 → evaluation/security dashboard
 
 Critical MVP correction:
-Do not start with a heavy production stack. Build MVP-lite first:
-- Streamlit workbench for the first UI;
-- FastAPI/application services for clean contracts;
+Do not start with a heavy production KG stack, but do build a real server-facing product slice:
+- React 19 + Vite 8 + TypeScript workbench for the first UI;
+- FastAPI API and application services for clean contracts;
 - Docling artifact memory bank: Markdown + structured JSON + tables + images + manifest;
 - DuckDB for source registry, artifacts, facts, evaluation, and gap analytics;
 - Qdrant for dense+sparse hybrid retrieval;
 - NetworkX for P0 graph path/neighborhood;
-- ports/adapters so DuckDB -> PostgreSQL, NetworkX -> Neo4j, Streamlit -> React later.
+- LiteLLM/OpenAI-compatible external APIs for LLM extraction, answer synthesis, and embeddings;
+- ports/adapters so DuckDB -> PostgreSQL, NetworkX -> Neo4j, local artifacts -> object storage later.
 
 Non-negotiable invariant:
 Every final-answer claim must map to an EvidenceSpan: exact source_id, span_id, page/row/image/table metadata, extraction run, validation status, and graph path or indexed retrieval unit.
@@ -77,10 +78,9 @@ P0 vertical slice:
    EvidenceSpan -[:FROM_DOCUMENT]-> Document
 6. Index Markdown chunks, table rows, claims, and entity/experiment summaries in Qdrant.
 7. Answer material-regime-property questions with experiment table, evidence cards, graph path, conflicts/gaps, and grounded summary.
-8. Evaluate on 10-20 gold questions with Recall@10, citation coverage, unsupported claim count, and ACL leak checks.
+8. Evaluate on one polished ideal demo scenario plus regression questions with Recall@10, citation coverage, unsupported claim count, source-label leak checks, and prompt-injection fixtures.
 
 Deferrals until P0 works:
-- React frontend;
 - Neo4j;
 - PostgreSQL;
 - worker queues;
@@ -92,7 +92,7 @@ Deferrals until P0 works:
 Please perform a deep review and produce a rigorous report:
 
 1. Challenge the MVP-lite architecture:
-   - Is DuckDB + NetworkX + Qdrant + Streamlit the right first implementation?
+   - Is DuckDB + NetworkX + Qdrant + React/FastAPI the right first implementation?
    - What will break first?
    - What should stay as ports/adapters?
    - What should be simplified further?
@@ -128,7 +128,7 @@ Please perform a deep review and produce a rigorous report:
 
 7. Review security:
    - What are the top risks for internal documents?
-   - How should ACL filtering happen before LLM context construction?
+   - How should source security-label filtering happen before LLM context construction when P0 has no user auth/RBAC?
    - What prompt-injection and data-leak checks are required?
 
 8. Review evaluation:

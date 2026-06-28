@@ -25,11 +25,12 @@ Artifact memory bank
 - DuckDB is the P0 system of record.
 - Qdrant is retrieval only.
 - NetworkX is graph materialization only.
-- Streamlit is UI only and must call application services.
+- React/Vite is the P0 UI and must call FastAPI contracts.
 - Markdown is a convenience view, not truth.
 - Tables, table rows, and table cells are first-class evidence.
 - Every final answer sentence must cite `EvidenceSpan` IDs.
-- ACL filtering happens before Qdrant context enters the LLM packet and is rechecked after retrieval.
+- Source security-label filtering happens before Qdrant context enters the LLM packet and is rechecked after retrieval.
+- External LLM and embedding APIs are allowed through LiteLLM/OpenAI-compatible providers, configured only by environment variables and server secrets.
 
 ## Required Ports
 
@@ -40,10 +41,10 @@ Keep these swappable:
 - `MetadataStorePort`: DuckDB now, PostgreSQL later.
 - `VectorIndexPort`: Qdrant now, alternative retrieval store later.
 - `GraphStorePort`: DuckDB edge tables plus NetworkX now, Neo4j later.
-- `EmbeddingModelPort`: local/FastEmbed or configured provider now, hosted later if approved.
+- `EmbeddingModelPort`: LiteLLM/OpenAI-compatible provider now, local/FastEmbed fallback later.
 - `SparseEncoderPort`: BM25/SPLADE/miniCOIL/BGE-M3-style sparse encoder can change.
 - `LLMExtractorPort`: provider/local model can change.
-- `ACLPolicyPort`: simple groups now, enterprise IAM later.
+- `SecurityLabelPolicyPort`: open demo access plus source labels now, enterprise IAM later.
 - `EvaluationStorePort`: DuckDB now, experiment tracking later.
 
 Do not over-abstract the core domain services:
@@ -119,7 +120,7 @@ data/artifacts/
 ## Minimum DuckDB Tables
 
 - `sources`;
-- `source_acl`;
+- `source_security_labels`;
 - `ingestion_runs`;
 - `artifacts`;
 - `evidence_spans`;
@@ -256,8 +257,8 @@ Index table rows separately. A table row is the most important retrieval unit fo
 
 1. Parse user query into material/regime/property candidates.
 2. Resolve canonical entities and aliases from DuckDB dictionaries.
-3. Resolve user ACL into allowed source/span IDs.
-4. Run Qdrant retrieval with mandatory ACL payload filters.
+3. Resolve source security-label policy into allowed source/span IDs.
+4. Run Qdrant retrieval with mandatory source/security-label payload filters.
 5. Retrieve dense and sparse candidates; use RRF when both are available.
 6. Rejoin candidate retrieval units back to DuckDB.
 7. Drop any unit whose source/span is not allowed.
@@ -287,7 +288,7 @@ Negative features:
 
 - low OCR confidence;
 - unsupported LLM-only claim;
-- ACL uncertainty hard reject.
+- Security-label uncertainty hard reject.
 
 ## Graph Model
 
@@ -350,7 +351,7 @@ No support IDs means no sentence.
 Minimum P0:
 
 - resolve allowed sources/spans before retrieval;
-- apply Qdrant payload ACL filters;
+- apply Qdrant payload security-label filters;
 - recheck source/span IDs after retrieval;
 - build LLM context only from allowed evidence;
 - mark prompt-injection-like spans as suspicious, not deleted;
@@ -359,7 +360,7 @@ Minimum P0:
 
 Pass thresholds:
 
-- `acl_leak_count = 0`;
+- `source_label_leak_count = 0`;
 - `restricted_source_in_context_count = 0`;
 - `prompt_injection_success_count = 0`;
 - `system_prompt_leak_count = 0`.
@@ -373,7 +374,7 @@ For a curated hackathon corpus:
 - TableRowRecall@10 >= 75%;
 - citation coverage >= 95%;
 - unsupported claim count = 0 on demo questions;
-- ACL leaks = 0;
+- source-label leaks = 0;
 - numeric value + unit accuracy >= 85%;
 - effect direction accuracy >= 80%;
 - entity resolution accuracy >= 85% for curated aliases;
@@ -393,7 +394,6 @@ Required:
 
 Omit:
 
-- React frontend;
 - login/admin system;
 - ontology editor;
 - arbitrary chat history;
@@ -420,7 +420,7 @@ Omit:
 
 48-54h: graph path builder.
 
-54-62h: Streamlit workbench.
+54-62h: React/Vite workbench.
 
 62-68h: evaluation and security gates.
 

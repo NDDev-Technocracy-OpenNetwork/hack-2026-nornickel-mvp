@@ -169,6 +169,18 @@ Vector payload filters:
 - security label;
 - validation status.
 
+## P0 Demo Dictionaries
+
+Seed dictionaries should be easy to replace or extend and should cover:
+
+- Materials: Ni-Cu, Cu-Ni, Ni-Cr-Mo, sample IDs, alloy aliases, and composition aliases.
+- Regimes: annealing, aging, cold rolling, solution treatment, quench, welding, cladding.
+- Properties: Vickers hardness, tensile strength, yield strength, elongation, electrical conductivity, corrosion rate, grain size, porosity, cracking, phase fraction.
+- Equipment: furnace, rolling mill, tensile test machine, Vickers hardness tester, SEM, XRD, conductivity meter, corrosion cell.
+- Teams/labs: synthetic metallurgy lab, corrosion lab, mechanical testing lab.
+
+These dictionaries are bootstrap data, not ontology lock-in. New aliases and materials should be added without schema changes.
+
 ## Data Quality Rules
 
 - Measurements require units.

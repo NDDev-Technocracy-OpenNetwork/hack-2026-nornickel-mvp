@@ -20,6 +20,9 @@ Date: 2026-06-28
 - Qdrant license: https://github.com/qdrant/qdrant/blob/master/LICENSE
 - Neo4j license notice: https://github.com/neo4j/neo4j/blob/dev/LICENSE.txt
 - FastAPI documentation: https://fastapi.tiangolo.com/
+- Vite documentation: https://vite.dev/
+- React documentation: https://react.dev/
+- LiteLLM documentation: https://docs.litellm.ai/
 - Docling documentation: https://docling-project.github.io/docling/
 - Docling repository: https://github.com/docling-project/docling
 - Docling license: https://github.com/docling-project/docling/blob/main/LICENSE
@@ -31,7 +34,6 @@ Date: 2026-06-28
 - MinerU repository: https://github.com/opendatalab/MinerU
 - BGE-M3 model card: https://huggingface.co/BAAI/bge-m3
 - DuckDB documentation: https://duckdb.org/docs/
-- Streamlit documentation: https://docs.streamlit.io/
 - NetworkX documentation: https://networkx.org/documentation/stable/
 - W3C PROV-O provenance ontology: https://www.w3.org/TR/prov-o/
 - FAIR Guiding Principles paper: https://www.nature.com/articles/sdata201618
@@ -40,6 +42,8 @@ Date: 2026-06-28
 - NOMAD Laboratory: https://nomad-lab.eu/
 - OWASP API Security Top 10 2023: https://owasp.org/API-Security/editions/2023/en/0x11-t10/
 - OWASP Top 10 for LLM Applications 2025: https://genai.owasp.org/resource/owasp-top-10-for-llm-applications-2025/
+- Node.js releases: https://nodejs.org/en/about/previous-releases
+- uv documentation: https://docs.astral.sh/uv/
 
 ## Source-Backed Findings
 
@@ -52,17 +56,21 @@ Date: 2026-06-28
 - FAIR principles and materials database standards such as OPTIMADE suggest that materials data should be modeled with stable identifiers, machine-readable metadata, clear schemas, and reusable provenance.
 - OWASP API and LLM guidance make two risks non-negotiable: object-level authorization for internal records and prompt-injection controls for untrusted source documents.
 - License posture is acceptable for hackathon demo but must be reviewed for productization: Docling and MarkItDown are MIT, Qdrant is Apache-2.0, and Neo4j source is GPLv3 unless a commercial agreement supersedes it.
-- For a working MVP, infrastructure should be lighter than the productized architecture: DuckDB can persist source/artifact/extraction metadata and run gap analytics locally, NetworkX can render/explain the typed graph path, and Streamlit can deliver the analyst workbench faster than a React app. Keep Postgres, Neo4j, and React behind adapters for P1/productization.
+- For a working MVP, infrastructure should still be lighter than the productized architecture: DuckDB can persist source/artifact/extraction metadata and run gap analytics locally, NetworkX can render/explain the typed graph path, and Qdrant can handle retrieval. The owner has chosen React/Vite over Streamlit for P0 because server-hosted visual quality matters more than fastest local prototyping.
+- FastAPI documentation recommends `fastapi[standard]` for standard dependencies and supports Uvicorn/FastAPI CLI deployment patterns.
+- LiteLLM provides a Python SDK with OpenAI-compatible `completion()` and `embedding()` calls, router/fallback patterns, and provider configuration through environment variables or API parameters.
+- Vite 8 requires Node.js 20.19+ or 22.12+; use Node 24 LTS as the server/frontend baseline.
+- OpenAI documentation confirms `gpt-5.5` and current embedding endpoints, but `gpt-5.5-mini` must be treated as a configurable LiteLLM alias until the deployment account confirms the exact model ID.
 
 ## Engineering Conclusion
 
 Use a hybrid product architecture:
 
 - Artifact memory bank with Markdown, structured JSON, extracted assets, manifests, and checksums.
-- Neo4j for canonical knowledge graph and relationship-heavy exploration.
+- DuckDB plus NetworkX for P0 graph paths; Neo4j is a later adapter for persistent graph queries.
 - Qdrant for hybrid dense plus sparse retrieval over chunks, claims, and entity pages.
-- PostgreSQL for application state, source registry, extraction jobs, users, review queues, and audit logs.
+- DuckDB for application state, source registry, extraction jobs, evidence ledger, answer claims, evaluation, and gap analytics.
 - FastAPI for the typed service API and ingestion/query orchestration.
-- React-based workbench for search, evidence review, graph exploration, timeline, and data-gap analysis.
+- React/Vite-based workbench for search, evidence review, graph exploration, timeline, data-gap analysis, and evaluation/security dashboards.
 
 This gives a strong hackathon demo without locking the final production design to one vendor.

@@ -1,6 +1,6 @@
 # Proposed Project Structure
 
-No scaffold code should be created until owner approval. After approval, use this minimal useful structure.
+Owner approval for scaffold/code implementation was given. Use this minimal useful structure.
 
 ```text
 .
@@ -10,20 +10,18 @@ No scaffold code should be created until owner approval. After approval, use thi
 ├── docker-compose.yml
 ├── .env.example
 ├── apps
-│   └── streamlit_app
-│       ├── Home.py
-│       ├── pages
-│       │   ├── 1_Import.py
-│       │   ├── 2_Artifact_Bank.py
-│       │   ├── 3_Extraction_Workbench.py
-│       │   ├── 4_Ask.py
-│       │   ├── 5_Graph.py
-│       │   └── 6_Evaluation.py
-│       └── components
-│           ├── evidence_card.py
-│           ├── experiment_table.py
-│           ├── graph_view.py
-│           └── metrics_panel.py
+│   └── web
+│       ├── package.json
+│       ├── vite.config.ts
+│       ├── tsconfig.json
+│       ├── index.html
+│       └── src
+│           ├── app
+│           ├── pages
+│           ├── features
+│           ├── entities
+│           ├── shared
+│           └── widgets
 ├── services
 │   └── api
 │       ├── main.py
@@ -108,13 +106,18 @@ No scaffold code should be created until owner approval. After approval, use thi
 │   ├── adversarial_questions.yml
 │   └── expected_spans.yml
 ├── sample_docs
+│   ├── synthetic
 │   └── README.md
 ├── tests
 │   ├── unit
 │   └── integration
 ├── docs
 │   ├── architecture
-│   └── demo
+│   ├── demo
+│   └── deployment
+├── .github
+│   └── workflows
+│       └── ci.yml
 └── .serena
     └── newproj
 ```
@@ -125,8 +128,8 @@ No scaffold code should be created until owner approval. After approval, use thi
 - `ports`: dependency boundaries for stores, parsers, models, auth, graph, and retrieval.
 - `adapters`: concrete MVP-lite implementations.
 - `pipelines`: executable ingestion, evidence, extraction, indexing, QA, evaluation, and security flows.
-- `services`: application service orchestration used by API and Streamlit.
-- `apps/streamlit_app`: judge-facing workbench only.
+- `services`: application service orchestration used by API and future workers.
+- `apps/web`: React/Vite judge-facing workbench and production UI.
 - `services/api`: stable API contracts only; keep business logic in `src/nornikel_kg/services`.
 
 ## Adapter Rule
@@ -140,7 +143,7 @@ Every external dependency must sit behind a port:
 - `DocumentParser`: Docling first, parser bakeoff alternatives later.
 - `ModelProvider`: configurable hosted or local model.
 - `EmbeddingProvider`: dense and sparse embedding providers.
-- `AuthProvider`: local stub first, SSO later.
+- `AuthProvider`: disabled/demo-open first, SSO/RBAC later.
 
 ## Required Make Targets
 
@@ -148,11 +151,14 @@ Every external dependency must sit behind a port:
 - `make test`: run unit and integration tests.
 - `make ingest-fixtures`: ingest curated sample documents.
 - `make eval`: run gold and adversarial evaluation.
-- `make demo`: start the Streamlit workbench and required local services.
+- `make web`: run the React/Vite dev server.
+- `make api`: run the FastAPI dev server.
+- `make demo`: start API, web, Qdrant, and required local services.
+- `make deploy`: deploy the current approved branch to `fa.nddev.asia`.
 
 ## Data Directory Rule
 
-Do not commit internal corpora. Only commit synthetic sample data and schema fixtures.
+Synthetic sample data and schema fixtures should be committed. Real internal corpora may be committed only when the owner explicitly provides/approves them for this private repository; generated runtime artifacts, local databases, Qdrant storage, caches, and secrets still must not be committed.
 
 ## Artifact Directory Rule
 
@@ -175,10 +181,9 @@ data/artifacts/
 
 ## Migration Direction
 
-Start with a modular Python application. Promote adapters only when the P0 evidence loop works and the scale trigger is real:
+Start with a modular Python backend and React frontend. Promote adapters only when the P0 evidence loop works and the scale trigger is real:
 
 - DuckDB to PostgreSQL for multi-user review/audit.
 - NetworkX to Neo4j for durable graph queries and Cypher.
-- Streamlit to React for polished production UX.
 - In-process jobs to worker queues for long ingestion.
 - Local artifacts to object storage for shared deployment.

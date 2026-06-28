@@ -19,13 +19,13 @@ sample corpus
 
 This path must work before graph visualization, domain NLP, or community-level GraphRAG summaries.
 
-## MVP-Lite Delivery Principle
+## P0 Delivery Principle
 
 Use the lightest adapter that proves the product contract:
 
 - DuckDB before PostgreSQL.
 - NetworkX before Neo4j.
-- Streamlit before React.
+- React/Vite now, because the owner wants a polished server-facing product UI.
 - In-process job runner before worker queues.
 - Local artifact directory before object storage.
 
@@ -37,34 +37,40 @@ The code must still be written through ports so each adapter can be replaced wit
 - Make DuckDB the P0 system of record.
 - Treat table rows and cells as first-class evidence.
 - Define `EffectClaim`, `ConflictGroup`, `DataGap`, and `answer_claims`.
-- Create 10-20 gold questions, including success, conflict, gap, ACL, and prompt-injection cases.
-- Decide LLM/embedding data boundary for internal documents.
-- Enforce ACL filtering before LLM context construction.
+- Create gold questions, including one ideal demo scenario plus success, conflict, gap, source-label, and prompt-injection cases.
+- Use LiteLLM/OpenAI-compatible external APIs for LLM and embeddings; configure with secrets only.
+- Enforce source-label filtering before LLM context construction.
 - Make answer output a claim ledger, not a prose blob.
 
 ### Phase 0: Owner Decisions
 
-Before scaffold:
+Owner decisions now confirmed:
 
-- confirm MVP priority;
-- confirm LLM policy;
-- confirm corpus format;
-- confirm demo dataset constraints;
-- confirm whether Docker Compose is acceptable.
-- pick 1-3 material families, 3-5 process regimes, and 5-10 properties for the demo slice.
+- scaffold/code implementation is approved;
+- merge planning work to `main` and continue in logical branches;
+- use external APIs via LiteLLM and prepared secret placeholders;
+- use Docker Compose;
+- use `uv`;
+- use React/Vite frontend and FastAPI backend;
+- deploy to `fa.nddev.asia` via `ssh server-nddev`;
+- create synthetic test/demo documents for PDF, DOCX, XLSX, CSV, PPTX, and images;
+- no user auth/RBAC in P0;
+- responses are Russian-first.
 
 ### Phase 1: Foundation
 
 Deliver:
 
 - repository scaffold;
-- local Python workspace for API, workbench, domain packages, and tests;
-- Docker Compose MVP profile for Qdrant only, plus full profile for future PostgreSQL/Neo4j;
+- Python 3.12 workspace for API, domain packages, ingestion, and tests;
+- React 19/Vite 8/TypeScript workspace for the frontend;
+- Docker Compose MVP profile for API, frontend, Qdrant, and volumes;
+- GitHub Actions CI for backend tests, frontend type/lint/build checks, docs hygiene, and secret scan;
 - source registry schema;
 - artifact memory bank layout and manifest schema;
 - minimal domain schemas;
 - seed dictionaries for materials, equipment, teams, and properties.
-- one synthetic or approved sample corpus that can be committed or safely mounted locally.
+- one synthetic or approved sample corpus that can be committed or safely mounted on the server.
 - gold/adversarial question fixtures and expected evidence spans.
 
 ### Phase 2: Ingestion
@@ -97,7 +103,7 @@ Deliver:
 
 Deliver:
 
-- research workbench UI;
+- React research workbench UI;
 - QA answer with citations;
 - evidence table;
 - graph path view;
@@ -110,7 +116,7 @@ Deliver:
 Deliver:
 
 - seed demo corpus;
-- 10-20 demo questions;
+- one ideal demo scenario plus 10-20 regression/evaluation questions;
 - retrieval/evidence report;
 - demo script;
 - risk list and production roadmap.
@@ -142,11 +148,4 @@ After hackathon:
 
 ## Explicit Approval Gate
 
-Scaffold code should start only after the owner approves:
-
-- stack choice;
-- MVP priority;
-- LLM policy;
-- corpus access mode;
-- security posture;
-- demo timeline.
+Closed on 2026-06-28 by owner instruction. Implementation may proceed in logical branches from `main`.
