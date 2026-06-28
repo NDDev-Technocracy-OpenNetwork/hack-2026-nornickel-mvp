@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 1e5e37a fix: harden ledger uploads and runtime init
+Last commit: 273c5f5 docs: sync ledger ingestion knowledge
 Scope: Makefile; .github/workflows/ci.yml; docker-compose.yml; docs/deployment/fa-nddev.md; apps/web/; services/api/
 Area: RELEASE
 -->

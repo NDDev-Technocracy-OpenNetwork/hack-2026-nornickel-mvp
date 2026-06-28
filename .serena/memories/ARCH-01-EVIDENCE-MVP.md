@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 1e5e37a fix: harden ledger uploads and runtime init
+Last commit: 273c5f5 docs: sync ledger ingestion knowledge
 Scope: apps/web/; services/api/; src/nornikel_kg/; docker-compose.yml; .github/workflows/ci.yml; .serena/newproj/nornikel-kg-search/
 Area: ARCH
 -->
