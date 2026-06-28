@@ -13,8 +13,14 @@ class EvidenceLedgerPort(Protocol):
     def list_sources(self) -> list[SourceSummary]:
         """Return registered source summaries."""
 
+    def get_source(self, source_id: str) -> SourceSummary | None:
+        """Return a source summary by identifier, or None when absent."""
+
     def list_evidence_spans(self, source_id: str | None = None) -> list[EvidenceSpan]:
         """Return evidence spans, optionally scoped to one source."""
+
+    def delete_source(self, source_id: str) -> bool:
+        """Delete one source and all related records. Returns False if source is absent."""
 
     def ingest_source_bytes(
         self,

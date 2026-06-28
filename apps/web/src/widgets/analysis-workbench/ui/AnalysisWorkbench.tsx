@@ -5,6 +5,7 @@ import { QuestionForm } from "@/features/ask-question";
 import {
   askQuestion,
   listSources,
+  deleteSource,
   uploadSource,
   type AskResponse,
   type SourceSummary,
@@ -58,6 +59,19 @@ export function AnalysisWorkbench() {
       }
     } catch (err) {
       setArtifactError(err instanceof Error ? err.message : "Не удалось загрузить источник");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDeleteSource(sourceId: string) {
+    setUploading(true);
+    setArtifactError(null);
+    try {
+      await deleteSource(sourceId);
+      await refreshSources();
+    } catch (err) {
+      setArtifactError(err instanceof Error ? err.message : "Не удалось удалить источник");
     } finally {
       setUploading(false);
     }
@@ -135,6 +149,7 @@ export function AnalysisWorkbench() {
           error={artifactError}
           loading={uploading}
           onUpload={handleUpload}
+          onDelete={handleDeleteSource}
           sources={sources}
         />
         {answer ? (

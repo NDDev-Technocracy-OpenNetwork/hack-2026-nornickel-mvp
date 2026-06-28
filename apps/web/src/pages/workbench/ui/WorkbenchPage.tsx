@@ -52,8 +52,6 @@ export function WorkbenchPage() {
           <div className="status-strip">
             <span className="status-pill">DuckDB evidence ledger</span>
             <span className="status-pill">CSV/Markdown ingest</span>
-            <span className="status-pill">Qdrant adapter prepared</span>
-            <span className="status-pill">LiteLLM ready</span>
           </div>
         </div>
         <AnalysisWorkbench />

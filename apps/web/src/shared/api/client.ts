@@ -49,3 +49,15 @@ export async function uploadSource(file: File): Promise<SourceIngestResponse> {
 
   return (await response.json()) as SourceIngestResponse;
 }
+
+export async function deleteSource(sourceId: string): Promise<{ source_id: string; deleted: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/sources/${sourceId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Source delete failed with ${response.status}`);
+  }
+
+  return (await response.json()) as { source_id: string; deleted: boolean };
+}

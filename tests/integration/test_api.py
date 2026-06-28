@@ -89,6 +89,70 @@ def test_sources_upload_and_evidence_listing(
     assert evidence.json()["evidence"][0]["span_type"] == "table_row"
 
 
+def test_sources_evidence_returns_404_for_missing_source(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+
+    response = client.get("/sources/not-existing-source/evidence")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Source not found"
+
+
+def test_sources_upload_rejects_invalid_csv(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+    invalid_csv = (
+        "experiment_id,material,regime,temperature_c,duration_h,atmosphere,"
+        "property,method,baseline_value,treated_value,unit,effect\n"
+        "exp_api_upload_bad,Ni-30Cu,aging,not-a-number,8,air,"
+        "Vickers hardness,HV10,200,230,HV,increase\n"
+    )
+
+    response = client.post(
+        "/sources/upload",
+        files={"file": ("bad.csv", invalid_csv, "text/csv")},
+    )
+
+    assert response.status_code == 400
+
+
+def test_sources_delete_endpoint_removes_source(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+    csv_content = (
+        "experiment_id,material,regime,temperature_c,duration_h,atmosphere,"
+        "property,method,baseline_value,treated_value,unit,effect\n"
+        "exp_api_upload,Ni-30Cu,aging,700,8,air,Vickers hardness,HV10,200,231,HV,increase\n"
+    )
+
+    upload = client.post(
+        "/sources/upload",
+        files={"file": ("deletable.csv", csv_content, "text/csv")},
+    )
+    source_id = upload.json()["source"]["source_id"]
+
+    response = client.delete(f"/sources/{source_id}")
+    assert response.status_code == 200
+    assert response.json() == {"source_id": source_id, "deleted": True}
+
+    response = client.get(f"/sources/{source_id}/evidence")
+    assert response.status_code == 404
+
+
+def test_sources_delete_endpoint_returns_404_for_missing_source(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+
+    response = client.delete("/sources/not-existing-source")
+    assert response.status_code == 404
+
+
 def test_sources_upload_rejects_unsupported_extension(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,

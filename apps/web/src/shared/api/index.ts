@@ -1,4 +1,4 @@
-export { askQuestion, listSources, uploadSource } from "./client";
+export { askQuestion, deleteSource, listSources, uploadSource } from "./client";
 export type {
   AskResponse,
   EvidenceSpan,

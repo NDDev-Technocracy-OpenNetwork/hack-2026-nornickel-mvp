@@ -22,6 +22,10 @@ from nornikel_kg.domain.models import (
     SourceSummary,
 )
 
+
+class SourceIngestError(ValueError):
+    """Raised when uploaded source content is invalid."""
+
 CSV_REQUIRED_COLUMNS = {
     "experiment_id",
     "material",
@@ -68,34 +72,40 @@ class DuckDBLedgerRepository:
         rows = self._parse_csv_rows(csv_bytes)
 
         with duckdb.connect(str(self.db_path)) as connection:
-            self._delete_source_records(connection, source_id)
-            self._register_source(
-                connection,
-                source_id=source_id,
-                title="Synthetic Ni-Cu aging report",
-                document_type="report+table",
-                raw_sha256=raw_sha256,
-                security_label="internal",
-            )
-            self._insert_csv_rows(
-                connection,
-                source_id=source_id,
-                rows=rows,
-                artifact_locator=str(csv_path),
-                parser_profile="synthetic_fixture_v1",
-                first_row_ordinal=3,
-            )
-            self._insert_markdown_evidence(
-                connection,
-                source_id=source_id,
-                text=report_path.read_text(encoding="utf-8"),
-                artifact_locator=str(report_path),
-                parser_profile="synthetic_fixture_v1",
-                selected_lines=(
-                    "method mismatch prevents direct numeric comparison",
-                    "not measured",
-                ),
-            )
+            try:
+                connection.execute("BEGIN")
+                self._delete_source_records(connection, source_id)
+                self._register_source(
+                    connection,
+                    source_id=source_id,
+                    title="Synthetic Ni-Cu aging report",
+                    document_type="report+table",
+                    raw_sha256=raw_sha256,
+                    security_label="internal",
+                )
+                self._insert_csv_rows(
+                    connection,
+                    source_id=source_id,
+                    rows=rows,
+                    artifact_locator=str(csv_path),
+                    parser_profile="synthetic_fixture_v1",
+                    first_row_ordinal=3,
+                )
+                self._insert_markdown_evidence(
+                    connection,
+                    source_id=source_id,
+                    text=report_path.read_text(encoding="utf-8"),
+                    artifact_locator=str(report_path),
+                    parser_profile="synthetic_fixture_v1",
+                    selected_lines=(
+                        "method mismatch prevents direct numeric comparison",
+                        "not measured",
+                    ),
+                )
+                connection.execute("COMMIT")
+            except (SourceIngestError, ValueError):
+                connection.execute("ROLLBACK")
+                raise
 
         return self.load_demo_packet()
 
@@ -113,19 +123,19 @@ class DuckDBLedgerRepository:
         warnings: list[str] = []
 
         with duckdb.connect(str(self.db_path)) as connection:
-            self._delete_source_records(connection, source_id)
-            self._register_source(
-                connection,
-                source_id=source_id,
-                title=title or filename,
-                document_type=document_type,
-                raw_sha256=raw_sha256,
-                security_label="internal",
-            )
-            if document_type == "table":
-                rows = self._parse_csv_rows(content)
-                warnings.extend(self._validate_csv_columns(rows))
-                if not warnings:
+            try:
+                connection.execute("BEGIN")
+                self._delete_source_records(connection, source_id)
+                self._register_source(
+                    connection,
+                    source_id=source_id,
+                    title=title or filename,
+                    document_type=document_type,
+                    raw_sha256=raw_sha256,
+                    security_label="internal",
+                )
+                if document_type == "table":
+                    rows = self._parse_csv_rows(content)
                     self._insert_csv_rows(
                         connection,
                         source_id=source_id,
@@ -134,15 +144,22 @@ class DuckDBLedgerRepository:
                         parser_profile="csv_table_v1",
                         first_row_ordinal=1,
                     )
-            else:
-                self._insert_markdown_evidence(
-                    connection,
-                    source_id=source_id,
-                    text=content.decode("utf-8", errors="replace"),
-                    artifact_locator=filename,
-                    parser_profile="markdown_text_v1",
-                    selected_lines=(),
-                )
+                else:
+                    self._insert_markdown_evidence(
+                        connection,
+                        source_id=source_id,
+                        text=content.decode("utf-8", errors="replace"),
+                        artifact_locator=filename,
+                        parser_profile="markdown_text_v1",
+                        selected_lines=(),
+                    )
+                connection.execute("COMMIT")
+            except (SourceIngestError, ValueError):
+                connection.execute("ROLLBACK")
+                raise
+            except Exception:
+                connection.execute("ROLLBACK")
+                raise
 
         source = next(item for item in self.list_sources() if item.source_id == source_id)
         return SourceIngestResponse(
@@ -296,6 +313,53 @@ class DuckDBLedgerRepository:
             for row in rows
         ]
 
+    def get_source(self, source_id: str) -> SourceSummary | None:
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                  s.source_id,
+                  s.title,
+                  s.document_type,
+                  s.security_label,
+                  COUNT(DISTINCT ev.span_id) AS evidence_count,
+                  COUNT(DISTINCT pm.measurement_id) AS measurement_count
+                FROM sources s
+                LEFT JOIN evidence_spans ev ON ev.source_id = s.source_id
+                LEFT JOIN property_measurements pm ON pm.source_id = s.source_id
+                WHERE s.source_id = ?
+                GROUP BY s.source_id, s.title, s.document_type, s.security_label
+                """,
+                [source_id],
+            ).fetchone()
+        if row is None:
+            return None
+        return SourceSummary(
+            source_id=str(row[0]),
+            title=str(row[1]),
+            document_type=str(row[2]),
+            security_label=row[3],
+            status="ledger",
+            evidence_count=int(row[4]),
+            measurement_count=int(row[5]),
+        )
+
+    def delete_source(self, source_id: str) -> bool:
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            source = self._find_source(connection, source_id)
+            if source is None:
+                return False
+            try:
+                connection.execute("BEGIN")
+                self._delete_source_records(connection, source_id)
+                connection.execute("COMMIT")
+            except Exception:
+                connection.execute("ROLLBACK")
+                raise
+        return source is not None
+
     def list_evidence_spans(self, source_id: str | None = None) -> list[EvidenceSpan]:
         self.migrate()
         where_clause = "WHERE source_id = ?" if source_id else ""
@@ -346,6 +410,33 @@ class DuckDBLedgerRepository:
         connection.execute("DELETE FROM evidence_spans WHERE source_id = ?", [source_id])
         connection.execute("DELETE FROM sources WHERE source_id = ?", [source_id])
 
+    def _find_source(
+        self,
+        connection: duckdb.DuckDBPyConnection,
+        source_id: str,
+    ) -> SourceSummary | None:
+        row = connection.execute(
+            """
+            SELECT
+              s.source_id,
+              s.title,
+              s.document_type,
+              s.security_label
+            FROM sources s
+            WHERE s.source_id = ?
+            """,
+            [source_id],
+        ).fetchone()
+        if row is None:
+            return None
+        return SourceSummary(
+            source_id=str(row[0]),
+            title=str(row[1]),
+            document_type=str(row[2]),
+            security_label=row[3],
+            status="ledger",
+        )
+
     def _register_source(
         self,
         connection: duckdb.DuckDBPyConnection,
@@ -365,16 +456,30 @@ class DuckDBLedgerRepository:
         )
 
     def _parse_csv_rows(self, content: bytes) -> list[dict[str, str]]:
-        text = content.decode("utf-8-sig")
-        return [dict(row) for row in csv.DictReader(io.StringIO(text))]
+        try:
+            text = content.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise SourceIngestError("CSV source must be UTF-8 encoded.") from exc
+        reader = csv.DictReader(io.StringIO(text))
+        if not reader.fieldnames:
+            raise SourceIngestError("CSV source has no header row.")
 
-    def _validate_csv_columns(self, rows: list[dict[str, str]]) -> list[str]:
+        normalized_fieldnames = [fieldname.strip() for fieldname in reader.fieldnames]
+        missing_columns = sorted(CSV_REQUIRED_COLUMNS.difference(set(normalized_fieldnames)))
+        if missing_columns:
+            raise SourceIngestError(
+                f"CSV source is missing required columns: {', '.join(missing_columns)}."
+            )
+        rows: list[dict[str, str]] = []
+        for row in reader:
+            normalized_row = {
+                normalized_fieldnames[index]: (value.strip() if isinstance(value, str) else "")
+                for index, value in enumerate(row.values())
+            }
+            rows.append(normalized_row)
         if not rows:
-            return ["CSV source has no data rows."]
-        missing = sorted(CSV_REQUIRED_COLUMNS.difference(rows[0].keys()))
-        if missing:
-            return [f"CSV source is missing required columns: {', '.join(missing)}."]
-        return []
+            raise SourceIngestError("CSV source has no data rows.")
+        return rows
 
     def _insert_csv_rows(
         self,
@@ -386,18 +491,14 @@ class DuckDBLedgerRepository:
         parser_profile: str,
         first_row_ordinal: int,
     ) -> None:
-        warnings = self._validate_csv_columns(rows)
-        if warnings:
-            return
-
         for index, row in enumerate(rows):
             row_ordinal = first_row_ordinal + index
-            material_name = row["material"].strip()
+            material_name = self._require_nonempty(row, "material", row_ordinal)
             material_id = self._material_id(material_name)
-            regime_type = row["regime"].strip().lower()
-            temperature_c = self._parse_float(row["temperature_c"])
-            duration_h = self._parse_float(row["duration_h"])
-            atmosphere = row["atmosphere"].strip()
+            regime_type = self._require_nonempty(row, "regime", row_ordinal).lower()
+            temperature_c = self._parse_float(row, "temperature_c", row_ordinal)
+            duration_h = self._parse_float(row, "duration_h", row_ordinal)
+            atmosphere = self._require_nonempty(row, "atmosphere", row_ordinal)
             regime_id = self._regime_id(regime_type, temperature_c, duration_h, atmosphere)
             regime_summary = self._regime_summary(
                 regime_type,
@@ -405,23 +506,32 @@ class DuckDBLedgerRepository:
                 duration_h,
                 atmosphere,
             )
-            property_raw = row["property"].strip()
-            property_id = self._property_id(property_raw, row["method"])
-            property_name = self._property_name(property_raw, row["method"])
-            baseline_value = self._parse_float(row["baseline_value"])
-            treated_value = self._parse_float(row["treated_value"])
-            unit = row["unit"].strip()
-            direction = row["effect"].strip().lower()
+            property_raw = self._require_nonempty(row, "property", row_ordinal)
+            method = self._require_nonempty(row, "method", row_ordinal)
+            property_id = self._property_id(property_raw, method)
+            property_name = self._property_name(property_raw, method)
+            baseline_value = self._parse_float(row, "baseline_value", row_ordinal)
+            treated_value = self._parse_float(row, "treated_value", row_ordinal)
+            unit = self._require_nonempty(row, "unit", row_ordinal)
+            direction = self._require_nonempty(row, "effect", row_ordinal).lower()
             if direction not in EFFECT_DIRECTIONS:
-                direction = "unknown"
+                raise SourceIngestError(
+                    f"Row {row_ordinal}: unsupported effect value '{direction}'. "
+                    f"Allowed: {', '.join(sorted(EFFECT_DIRECTIONS))}."
+                )
             effect_direction = cast(EffectDirection, direction)
             delta_value = None
             if treated_value is not None and baseline_value is not None:
                 delta_value = round(treated_value - baseline_value, 6)
-            experiment_id = row["experiment_id"].strip() or fact_id("experiment", row)
+            experiment_id = self._require_nonempty(row, "experiment_id", row_ordinal)
             table_text = self._table_row_text(
-                row=row,
                 material_name=material_name,
+                regime=regime_type,
+                temperature=temperature_c,
+                duration=duration_h,
+                atmosphere=atmosphere,
+                property_name=property_name,
+                method=method,
                 baseline_value=baseline_value,
                 treated_value=treated_value,
                 unit=unit,
@@ -456,7 +566,7 @@ class DuckDBLedgerRepository:
                 value=treated_value,
                 unit=unit,
                 original_value=f"{treated_value:g} {unit}" if treated_value is not None else None,
-                method=row["method"].strip(),
+                method=method,
                 supporting_span_ids=[table_span.span_id],
             )
             effect = EffectClaim(
@@ -888,25 +998,49 @@ class DuckDBLedgerRepository:
     def _table_row_text(
         self,
         *,
-        row: dict[str, str],
         material_name: str,
+        regime: str,
+        temperature: float | None,
+        duration: float | None,
+        atmosphere: str,
+        property_name: str,
+        method: str,
         baseline_value: float | None,
         treated_value: float | None,
         unit: str,
     ) -> str:
         baseline = "unknown" if baseline_value is None else f"{baseline_value:g} {unit}"
         treated = "unknown" if treated_value is None else f"{treated_value:g} {unit}"
+        temperature_text = "?" if temperature is None else f"{temperature:g}"
+        duration_text = "?" if duration is None else f"{duration:g}"
         return (
-            f"Sample {material_name}-A | {row['regime'].title()} {row['temperature_c']} C | "
-            f"{row['duration_h']} h | {row['atmosphere']} | {row['property']} {row['method']} | "
+            f"Sample {material_name}-A | {regime.title()} {temperature_text} C | "
+            f"{duration_text} h | {atmosphere} | {property_name} {method} | "
             f"baseline {baseline} | treated {treated}"
         )
 
-    def _parse_float(self, value: str) -> float | None:
-        stripped = value.strip()
+    def _parse_float(self, row: dict[str, str], field: str, row_number: int) -> float:
+        raw = row.get(field)
+        if raw is None:
+            raise SourceIngestError(f"Row {row_number}: missing required numeric field '{field}'.")
+        stripped = raw.strip()
         if not stripped:
-            return None
-        return float(stripped)
+            raise SourceIngestError(f"Row {row_number}: field '{field}' is required.")
+        try:
+            return float(stripped)
+        except ValueError as exc:
+            raise SourceIngestError(
+                f"Row {row_number}: field '{field}' must be a numeric value."
+            ) from exc
+
+    def _require_nonempty(self, row: dict[str, str], field: str, row_number: int) -> str:
+        raw = row.get(field)
+        if raw is None:
+            raise SourceIngestError(f"Row {row_number}: missing required field '{field}'.")
+        value = raw.strip()
+        if not value:
+            raise SourceIngestError(f"Row {row_number}: field '{field}' is required.")
+        return value
 
     def _slug(self, value: str) -> str:
         return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")

@@ -9,6 +9,7 @@ type ArtifactBankPanelProps = {
   loading: boolean;
   error: string | null;
   onUpload: (file: File) => Promise<void>;
+  onDelete: (sourceId: string) => Promise<void>;
 };
 
 export function ArtifactBankPanel({
@@ -16,6 +17,7 @@ export function ArtifactBankPanel({
   loading,
   error,
   onUpload,
+  onDelete,
 }: ArtifactBankPanelProps) {
   const [file, setFile] = useState<File | null>(null);
 
@@ -61,6 +63,17 @@ export function ArtifactBankPanel({
               <span>{source.evidence_count} evidence</span>
               <span>{source.measurement_count} facts</span>
             </div>
+            <button
+              aria-label={`Delete source ${source.title}`}
+              className="secondary-button"
+              disabled={loading}
+              onClick={async () => {
+                await onDelete(source.source_id);
+              }}
+              type="button"
+            >
+              Delete
+            </button>
           </article>
         ))}
       </div>
