@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: d60d647 fix: resolve runtime project root in containers
+Last commit: ebcd076 Merge pull request #4 from rldyourmnd/codex/fix-runtime-project-root
 Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/; src/nornikel_kg/services/qa_service.py; src/nornikel_kg/services/runtime.py; sample_docs/synthetic/; eval/
 Area: DATA
 -->

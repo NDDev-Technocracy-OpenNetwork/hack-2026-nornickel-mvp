@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: d60d647 fix: resolve runtime project root in containers
+Last commit: ebcd076 Merge pull request #4 from rldyourmnd/codex/fix-runtime-project-root
 Scope: Makefile; .github/workflows/ci.yml; docker-compose.yml; docs/deployment/fa-nddev.md; apps/web/; services/api/
 Area: RELEASE
 -->
@@ -35,6 +35,11 @@ Frontend runs `npm ci --no-audit`, `npm run typecheck`, and `npm run build`.
 Docker Compose defines `api`, `web`, and `qdrant`. The `.env` file is optional in Compose;
 runtime secrets are expected to live outside git.
 
+The `fa.nddev.asia` deployment uses a server-only Compose override at
+`/home/ubuntu/nornikel-kg-search/docker-compose.server.yml`: `web` binds to
+`127.0.0.1:8513`, `api` stays internal to the Compose network, and `qdrant` is not published
+to the host.
+
 ## Contracts And Data
 
 The web container serves the Vite build through Nginx and proxies `/api/` to the FastAPI
@@ -43,6 +48,10 @@ container. `VITE_API_BASE_URL` defaults to `/api` for container deployment and c
 
 The API container sets `PROJECT_ROOT=/app`; `src/nornikel_kg/services/runtime.py` uses that
 root to resolve `data/` and `sample_docs/` after the package is installed into site-packages.
+
+Host-level Nginx terminates TLS for `fa.nddev.asia` in
+`/etc/nginx/conf.d/fa-nddev-asia.conf`, uses the existing Let's Encrypt certificate under
+`/etc/letsencrypt/live/fa.nddev.asia/`, and proxies HTTPS traffic to `127.0.0.1:8513`.
 
 ## Invariants
 
@@ -61,9 +70,6 @@ dependencies, update `uv.lock` and run backend tests.
 - `make ci`: proves Python lint/type/tests and TypeScript/build.
 - `make eval`: proves fixture answer verification metrics.
 - `docker compose config`: proves Compose syntax.
+- Server smoke: `curl -fsS https://fa.nddev.asia/api/health` and public
+  `POST https://fa.nddev.asia/api/qa/ask` prove the deployed reverse proxy and API route.
 - Browser validation: local ignored screenshots under `browser/` prove the workbench desktop/mobile flow.
-
-## Known Gaps
-
-- No server deployment has been executed from this branch yet.
-- TLS/reverse proxy for `fa.nddev.asia` is assumed to be handled by server-level infrastructure.

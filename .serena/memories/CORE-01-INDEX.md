@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 1ad13b2 chore: add ci docker docs and memory sync
+Last commit: ebcd076 Merge pull request #4 from rldyourmnd/codex/fix-runtime-project-root
 Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml
 Area: CORE
 -->
@@ -37,7 +37,7 @@ Index the durable project knowledge for the Nornikel Materials KG Search hackath
 
 ## Current Behavior
 
-The repository contains a working P0 scaffold on the implementation branch: FastAPI API, React/Vite workbench, DuckDB-backed synthetic evidence ledger, deterministic evidence-backed QA response, fixtures/eval, CI workflow, and Docker Compose configuration.
+The repository contains a working P0 scaffold on `main`: FastAPI API, React/Vite workbench, DuckDB-backed synthetic evidence ledger, deterministic evidence-backed QA response, fixtures/eval, CI workflow, Docker Compose configuration, and deployment notes for `fa.nddev.asia`.
 
 ## Contracts And Data
 

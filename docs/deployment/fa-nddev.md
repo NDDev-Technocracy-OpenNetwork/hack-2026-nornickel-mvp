@@ -27,7 +27,20 @@ Current Compose services:
 - `api`: FastAPI application.
 - `qdrant`: vector database placeholder for the retrieval adapter.
 
-Before production rollout, verify:
+For the shared `fa.nddev.asia` server, use a server-only Compose override stored on
+the host as `/home/ubuntu/nornikel-kg-search/docker-compose.server.yml`:
+
+- `web` publishes only `127.0.0.1:8513:80`.
+- `api` is exposed only inside the Compose network and sets `PROJECT_ROOT=/app`.
+- `qdrant` is not published to the host.
+- `/home/ubuntu/nornikel-kg-search/data` is bind-mounted for the DuckDB runtime ledger.
+
+TLS is terminated by the host-level Nginx virtual host
+`/etc/nginx/conf.d/fa-nddev-asia.conf`. The vhost uses the existing Let's Encrypt
+certificate at `/etc/letsencrypt/live/fa.nddev.asia/` and proxies all HTTPS traffic
+to `http://127.0.0.1:8513`.
+
+Before rollout, verify:
 
 ```bash
 docker compose config
@@ -36,5 +49,15 @@ curl -fsS http://127.0.0.1:5173/
 curl -fsS http://127.0.0.1:8000/health
 ```
 
-The current scaffold does not include TLS termination or reverse-proxy configuration for
-`fa.nddev.asia`; that should be handled by the server-level proxy already managing the domain.
+On the `fa.nddev.asia` host, verify:
+
+```bash
+cd /home/ubuntu/nornikel-kg-search
+docker compose -f docker-compose.server.yml ps
+curl -fsS http://127.0.0.1:8513/api/health
+curl -fsS -X POST http://127.0.0.1:8513/api/qa/ask \
+  -H 'Content-Type: application/json' \
+  --data '{"question":"Что делали по Ni-30Cu при старении 700 C 8 ч?"}'
+sudo nginx -t
+curl -I https://fa.nddev.asia
+```
