@@ -15,6 +15,9 @@ This repository now contains a working scaffold for the MVP:
 - React/Vite frontend for the analysis workbench.
 - Stable `EvidenceSpan` ID primitives.
 - Pydantic domain models for evidence, measurements, effects, graph paths, and answer claims.
+- DuckDB evidence ledger as the P0 system of record for sources, spans, measurements, and effects.
+- CSV/Markdown source upload API with source-scoped fact identity and evidence listing.
+- React artifact bank with source counts, upload flow, evidence cards, graph path, and eval/security metrics.
 - Synthetic fixture corpus and gold/adversarial evaluation placeholders.
 - CI for backend lint/type/tests/eval and frontend type/build.
 - Docker Compose with API, web, and Qdrant services.
@@ -67,7 +70,8 @@ docker compose config
 
 ## Demo Scenario
 
-The scaffold ships one ideal synthetic scenario:
+The scaffold ships one polished synthetic investigation path and an ingestable CSV/Markdown
+artifact bank:
 
 ```text
 What has already been done for Ni-30Cu under aging at 700 C for 8 h,
@@ -85,15 +89,22 @@ The API returns:
 - one missing-conductivity data gap;
 - verification metrics with unsupported claims and source-label leaks set to zero.
 
+The artifact bank can ingest CSV files with the required experiment columns and Markdown/text
+sources. Uploaded table rows become first-class `EvidenceSpan` records and source-scoped
+measurements, so adding an overlapping CSV does not overwrite the seeded report facts.
+
 ## Architecture Boundary
 
 P0 keeps the system modular but intentionally simple:
 
-- DuckDB is the future system of record for the scientific evidence ledger.
-- Qdrant is retrieval only.
-- NetworkX is reserved for per-query graph neighborhoods.
-- LiteLLM/OpenAI-compatible providers are prepared through environment variables.
-- Docling/OCR ingestion is a P1 adapter path; current scaffold uses synthetic fixtures.
+- DuckDB is the current P0 system of record for the scientific evidence ledger.
+- Qdrant is present in Compose and dependency configuration, but runtime retrieval is not wired yet.
+- Graph paths are returned deterministically from the ledger; NetworkX remains a later
+  graph-neighborhood adapter.
+- LiteLLM/OpenAI-compatible providers are prepared through environment variables, but extraction
+  and answer writing are deterministic in P0.
+- Docling/OCR ingestion is a P1 adapter path; current ingestion supports fixture seeding plus
+  CSV/Markdown uploads.
 
 No real secrets are committed. Copy `.env.example` to `.env` on a runtime host and fill provider keys there.
 

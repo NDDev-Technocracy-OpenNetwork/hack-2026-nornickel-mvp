@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 259ecc6 feat: add react evidence workbench
+Last commit: 273c5f5 docs: sync ledger ingestion knowledge
 Scope: apps/web/; services/api/; src/nornikel_kg/; docker-compose.yml; .github/workflows/ci.yml; .serena/newproj/nornikel-kg-search/
 Area: ARCH
 -->
@@ -22,19 +22,20 @@ Capture the P0 architecture contract for the evidence-first materials research w
 ## Entry Points
 
 - `src/nornikel_kg/services/qa_service.py`: deterministic evidence-backed QA assembly and claim verification.
-- `src/nornikel_kg/services/runtime.py`: runtime factory that seeds and loads the synthetic DuckDB ledger.
+- `src/nornikel_kg/services/runtime.py`: runtime factory that seeds and loads the DuckDB ledger.
 - `src/nornikel_kg/ports/ledger.py`: evidence ledger port boundary.
-- `src/nornikel_kg/adapters/duckdb/repositories.py`: DuckDB repository for the synthetic evidence ledger.
+- `src/nornikel_kg/adapters/duckdb/repositories.py`: DuckDB repository for seeded and uploaded evidence sources.
 - `apps/web/src/`: React/Vite workbench organized by app/pages/widgets/features/entities/shared.
 - `services/api/`: thin FastAPI route layer.
 
 ## Current Behavior
 
-P0 scaffold uses React 19/Vite 8/TypeScript for the workbench, FastAPI for the API, Python 3.12 for backend/scientific code, and DuckDB as the current synthetic evidence ledger. Qdrant is present in Compose and dependency configuration but is not yet used by the QA runtime. NetworkX, Docling/OCR, and LiteLLM/OpenAI-compatible LLM/embedding calls are P1 adapter wiring paths. Neo4j, PostgreSQL, queues, and object storage remain deferred migrations.
+P0 scaffold uses React 19/Vite 8/TypeScript for the workbench, FastAPI for the API, Python 3.12 for backend/scientific code, and DuckDB as the current evidence ledger. Runtime seeds the synthetic fixture and can ingest CSV/Markdown sources through `/sources/upload`. Qdrant is present in Compose and dependency configuration but is not yet used by the QA runtime. NetworkX, Docling/OCR, and LiteLLM/OpenAI-compatible LLM/embedding calls are P1 adapter wiring paths. Neo4j, PostgreSQL, queues, and object storage remain deferred migrations.
 
 ## Contracts And Data
 
-Current implemented port: `EvidenceLedgerPort`.
+Current implemented port: `EvidenceLedgerPort`. It covers source listing, evidence listing,
+source upload, and evidence packet loading.
 
 Planned ports remain: `DocumentParserPort`, `ArtifactStorePort`, `MetadataStorePort`, `VectorIndexPort`, `GraphStorePort`, `EmbeddingModelPort`, `SparseEncoderPort`, `LLMExtractorPort`, `SecurityLabelPolicyPort`, and `EvaluationStorePort`.
 
@@ -58,4 +59,5 @@ Keep implementation changes aligned with `18_IMPLEMENTATION_SPEC.md` first, then
 - `make ci`: backend/frontend scaffold gate.
 - `make eval`: deterministic evidence packet verification.
 - `docker compose config`: validates server-first Compose wiring.
-- Browser validation: `browser/workbench-answer.png`, `browser/workbench-mobile.png`, and `browser/workbench-mobile-results.png` are local proof artifacts and must not be committed.
+- Browser validation: ignored `browser/ledger-fixed-*.png` and `browser/ledger-fixed-*.yaml`
+  artifacts prove the desktop query/upload flow and mobile layout; do not commit them.

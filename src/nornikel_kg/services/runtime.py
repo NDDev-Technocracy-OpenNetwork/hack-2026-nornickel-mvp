@@ -3,9 +3,12 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
+from threading import Lock
 
 from nornikel_kg.adapters.duckdb.repositories import DuckDBLedgerRepository
 from nornikel_kg.services.qa_service import DemoQAService
+
+_repository_build_lock = Lock()
 
 
 def project_root() -> Path:
@@ -27,11 +30,14 @@ def resolve_project_path(value: str) -> Path:
 
 @lru_cache
 def get_ledger_repository() -> DuckDBLedgerRepository:
-    db_path = resolve_project_path(os.getenv("DUCKDB_PATH", "data/catalog.duckdb"))
-    sample_dir = resolve_project_path(os.getenv("SYNTHETIC_SAMPLE_DIR", "sample_docs/synthetic"))
-    repository = DuckDBLedgerRepository(db_path)
-    repository.seed_synthetic_fixture(sample_dir)
-    return repository
+    with _repository_build_lock:
+        db_path = resolve_project_path(os.getenv("DUCKDB_PATH", "data/catalog.duckdb"))
+        sample_dir = resolve_project_path(
+            os.getenv("SYNTHETIC_SAMPLE_DIR", "sample_docs/synthetic")
+        )
+        repository = DuckDBLedgerRepository(db_path)
+        repository.seed_synthetic_fixture(sample_dir)
+        return repository
 
 
 @lru_cache

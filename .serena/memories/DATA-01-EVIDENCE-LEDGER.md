@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: e7e92ec docs: record fa deployment contract
+Last commit: 273c5f5 docs: sync ledger ingestion knowledge
 Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/; src/nornikel_kg/services/qa_service.py; src/nornikel_kg/services/runtime.py; sample_docs/synthetic/; eval/
 Area: DATA
 -->
@@ -18,7 +18,7 @@ Capture evidence identity, artifact memory, scientific schemas, and answer-claim
 - `src/nornikel_kg/domain/models.py`: implemented Pydantic API/domain payload models.
 - `src/nornikel_kg/domain/evidence.py`: implemented `EvidenceSpanFactory`.
 - `src/nornikel_kg/adapters/duckdb/migrations/001_init.sql`: implemented P0 ledger tables.
-- `src/nornikel_kg/adapters/duckdb/repositories.py`: implemented synthetic DuckDB seed/load adapter.
+- `src/nornikel_kg/adapters/duckdb/repositories.py`: implemented DuckDB seed/load/upload adapter.
 - `sample_docs/synthetic/`: committed synthetic report and mechanical property table.
 - `.serena/newproj/nornikel-kg-search/07_DATA.md`: domain model and graph path.
 - `.serena/newproj/nornikel-kg-search/06_API.md`: API-level answer and graph response contracts.
@@ -27,16 +27,30 @@ Capture evidence identity, artifact memory, scientific schemas, and answer-claim
 ## Entry Points
 
 - `DuckDBLedgerRepository.seed_synthetic_fixture`: reads committed synthetic CSV/Markdown, creates source/evidence/measurement/effect records, and writes DuckDB.
+- `DuckDBLedgerRepository.ingest_source_bytes`: ingests uploaded CSV or Markdown/text sources into DuckDB.
+- `DuckDBLedgerRepository.list_sources`: returns source summaries with evidence and measurement counts.
+- `DuckDBLedgerRepository.list_evidence_spans`: returns evidence spans globally or for one source.
 - `DuckDBLedgerRepository.load_demo_packet`: returns the current evidence packet used by QA.
 - `DemoQAService.ask`: assembles the response from an `EvidenceLedgerPort` when provided, otherwise uses a deterministic fallback packet.
 
 ## Current Behavior
 
-The implemented scaffold writes a synthetic DuckDB evidence ledger with `sources`, `evidence_spans`, `property_measurements`, `effect_claims`, and `answer_claims`. Runtime seeding happens through `get_ledger_repository()` using `PROJECT_ROOT`, `DUCKDB_PATH`, and `SYNTHETIC_SAMPLE_DIR`, defaulting to `data/catalog.duckdb` and `sample_docs/synthetic`. Container runtime sets `PROJECT_ROOT=/app`; local runtime falls back to the current working directory when `sample_docs/` exists.
+The implemented scaffold writes a DuckDB evidence ledger with `sources`, `evidence_spans`,
+`property_measurements`, `effect_claims`, and `answer_claims`. Runtime seeding happens through
+`get_ledger_repository()` using `PROJECT_ROOT`, `DUCKDB_PATH`, and `SYNTHETIC_SAMPLE_DIR`,
+defaulting to `data/catalog.duckdb` and `sample_docs/synthetic`. Container runtime sets
+`PROJECT_ROOT=/app`; local runtime falls back to the current working directory when
+`sample_docs/` exists. Runtime repository construction is guarded by a process-level lock so
+concurrent first requests cannot race DuckDB migration/seed writes.
+
+CSV uploads must include `experiment_id`, `material`, `regime`, `temperature_c`, `duration_h`,
+`atmosphere`, `property`, `method`, `baseline_value`, `treated_value`, `unit`, and `effect`.
+Uploaded rows become `table_row` evidence spans plus source-scoped measurements/effects. Markdown
+or text uploads are stored as evidence spans without deriving measurements in P0.
 
 ## Contracts And Data
 
-Separate IDs are implemented for `source_id`, `artifact_id`, `span_id`, `fact_id`, and `claim_id`. `span_id` does not include `extraction_run_id`, and `tests/unit/test_ids.py` verifies whitespace-normalized span stability.
+Separate IDs are implemented for `source_id`, `artifact_id`, `span_id`, `fact_id`, and `claim_id`. `span_id` does not include `extraction_run_id`, and `tests/unit/test_ids.py` verifies whitespace-normalized span stability. Measurement and effect IDs include `source_id` for CSV/table ingestion, and experiment row assembly joins measurements to effects by `experiment_id`, `property_id`, and `source_id`; uploaded overlapping CSV sources must not overwrite seeded report facts.
 
 Table rows and table cells are first-class evidence units. `EffectClaim` is required for "what effect" answers and must reference baseline/treated measurements or be marked qualitative-only.
 

@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS sources (
   source_id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
+  document_type TEXT NOT NULL DEFAULT 'report',
   raw_sha256 TEXT NOT NULL,
   security_label TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS evidence_spans (
 
 CREATE TABLE IF NOT EXISTS property_measurements (
   measurement_id TEXT PRIMARY KEY,
+  source_id TEXT,
   experiment_id TEXT NOT NULL,
   property_id TEXT NOT NULL,
   property_name TEXT NOT NULL,
@@ -34,9 +36,12 @@ CREATE TABLE IF NOT EXISTS property_measurements (
 
 CREATE TABLE IF NOT EXISTS effect_claims (
   effect_id TEXT PRIMARY KEY,
+  source_id TEXT,
   experiment_id TEXT NOT NULL,
   material_id TEXT NOT NULL,
+  material_name TEXT,
   regime_id TEXT NOT NULL,
+  regime_summary TEXT,
   property_id TEXT NOT NULL,
   direction TEXT NOT NULL,
   supporting_span_ids_json TEXT NOT NULL,

@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: e7e92ec docs: record fa deployment contract
+Last commit: 273c5f5 docs: sync ledger ingestion knowledge
 Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; docs/deployment/fa-nddev.md; tests/
 Area: TECHDEBT
 -->
@@ -28,9 +28,10 @@ Capture verified scaffold gaps that matter for future implementation, without us
 
 ## Current Behavior
 
-The scaffold is a working single-scenario product shell backed by a synthetic DuckDB ledger.
-It does not yet parse arbitrary uploaded PDFs/DOCX/PPTX/XLSX/images, does not build Qdrant
-indexes, and does not call LiteLLM for extraction or answer writing.
+The scaffold is a working evidence-led product shell backed by a DuckDB ledger. It seeds a
+synthetic Ni-Cu corpus and supports CSV/Markdown upload into source/evidence/fact tables. It does
+not yet parse arbitrary uploaded PDFs/DOCX/PPTX/XLSX/images, does not build Qdrant indexes, and
+does not call LiteLLM for extraction or answer writing.
 
 FastAPI tests pass but emit a Starlette deprecation warning that `fastapi.testclient` currently
 uses `httpx` and may require `httpx2` in a future dependency cycle.
@@ -67,5 +68,7 @@ retrieval/indexing third, answer assembly last. Extend tests and eval fixtures w
 - Real Docling/OCR ingestion is not wired.
 - Qdrant hybrid retrieval is not wired.
 - LiteLLM extraction and answer synthesis are not wired.
+- Uploaded Markdown/text sources create evidence spans only; P0 does not extract measurements from
+  prose uploads.
 - API Docker builds should be optimized with a lock-aware install and Docker build cache mounts
   before frequent server redeploys.
