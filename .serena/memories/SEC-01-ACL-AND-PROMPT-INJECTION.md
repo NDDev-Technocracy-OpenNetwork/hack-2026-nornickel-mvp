@@ -1,7 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 5acab4a docs: lock implementation decisions
-Scope: .serena/newproj/nornikel-kg-search/09_SECURITY.md; .serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md; .serena/newproj/nornikel-kg-search/19_OWNER_DECISIONS.md
+Last commit: 259ecc6 feat: add react evidence workbench
+Scope: src/nornikel_kg/domain/security.py; src/nornikel_kg/domain/answer_claims.py; src/nornikel_kg/services/qa_service.py; tests/unit/test_source_label_policy.py; tests/unit/test_claim_verifier.py; eval/adversarial_questions.yml
 Area: SEC
 -->
 
@@ -19,17 +19,18 @@ Capture safety boundaries for source-label filtering, internal-document retrieva
 
 ## Entry Points
 
-- Future `src/nornikel_kg/ports/acl_policy.py` or `security_label_policy.py`: source-label policy boundary.
-- Future `src/nornikel_kg/pipelines/security_checks.py`: adversarial fixture checks.
-- Future `src/nornikel_kg/services/qa_service.py`: context construction and post-retrieval recheck.
+- `src/nornikel_kg/domain/security.py`: `SourceLabelPolicy` allow-list filtering for evidence spans.
+- `src/nornikel_kg/domain/answer_claims.py`: `ClaimVerifier` citation coverage and source-label leak counting.
+- `src/nornikel_kg/services/qa_service.py`: filters evidence before answer assembly and verifies final claims.
+- `eval/adversarial_questions.yml`: current adversarial fixture expectations.
 
 ## Current Behavior
 
-The repository has no running app yet. P0 has no user auth/RBAC. The P0 security design requires source-label filtering before retrieved evidence enters an LLM context and requires post-retrieval rechecks against DuckDB.
+P0 has no user auth/RBAC. The implemented scaffold applies source-label filtering before answer assembly and verifies that each answer sentence references allowed evidence spans. The current synthetic fixture includes a prompt-injection-like line in the source Markdown; it is not used as an instruction and `prompt_injection_success_count` remains zero in eval.
 
 ## Contracts And Data
 
-Retrieval sequence: resolve active demo policy and allowed source-label set, resolve allowed source/span IDs in DuckDB, query Qdrant with mandatory source/security-label payload filters, rejoin to DuckDB, drop disallowed candidates, build LLM context only from allowed evidence, traverse only allowed evidence-backed graph edges, and verify all cited spans before returning the answer.
+Implemented sequence: load evidence packet from DuckDB/fallback, filter spans with `SourceLabelPolicy`, assemble answer only from allowed spans, and run `ClaimVerifier` before returning. Planned retrieval sequence still requires DuckDB allowed-source resolution before Qdrant candidate retrieval and post-retrieval recheck.
 
 Prompt-like source content is untrusted evidence. It should be flagged during ingestion and wrapped as untrusted context, not followed as instructions.
 
@@ -46,5 +47,6 @@ When adding retrieval, graph expansion, or answer assembly, add source-label fil
 
 ## Verification
 
-- Future `make eval`: must include source-label and prompt-injection fixture results.
-- Future `tests/unit/test_source_label_filters.py`: must prove Qdrant candidates are rechecked against DuckDB before context construction.
+- `make eval`: reports `source_label_leak_count = 0` and `prompt_injection_success_count = 0` for the current fixture.
+- `tests/unit/test_source_label_policy.py`: verifies disallowed labels are filtered.
+- `tests/unit/test_claim_verifier.py`: verifies unsupported claims and restricted evidence references are counted.

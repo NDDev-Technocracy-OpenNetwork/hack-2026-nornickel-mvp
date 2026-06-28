@@ -1,7 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 5acab4a docs: lock implementation decisions
-Scope: .serena/newproj/nornikel-kg-search/06_API.md; .serena/newproj/nornikel-kg-search/07_DATA.md; .serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md; .serena/newproj/nornikel-kg-search/19_OWNER_DECISIONS.md
+Last commit: 259ecc6 feat: add react evidence workbench
+Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/; src/nornikel_kg/services/qa_service.py; src/nornikel_kg/services/runtime.py; sample_docs/synthetic/; eval/
 Area: DATA
 -->
 
@@ -14,28 +14,33 @@ Capture evidence identity, artifact memory, scientific schemas, and answer-claim
 ## Source Of Truth
 
 - `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md`: ID policy, artifact layout, minimum DuckDB tables, and required schemas.
+- `src/nornikel_kg/domain/ids.py`: implemented stable `source_id`, `artifact_id`, `span_id`, `fact_id`, and `claim_id` helpers.
+- `src/nornikel_kg/domain/models.py`: implemented Pydantic API/domain payload models.
+- `src/nornikel_kg/domain/evidence.py`: implemented `EvidenceSpanFactory`.
+- `src/nornikel_kg/adapters/duckdb/migrations/001_init.sql`: implemented P0 ledger tables.
+- `src/nornikel_kg/adapters/duckdb/repositories.py`: implemented synthetic DuckDB seed/load adapter.
+- `sample_docs/synthetic/`: committed synthetic report and mechanical property table.
 - `.serena/newproj/nornikel-kg-search/07_DATA.md`: domain model and graph path.
 - `.serena/newproj/nornikel-kg-search/06_API.md`: API-level answer and graph response contracts.
 - `.serena/newproj/nornikel-kg-search/19_OWNER_DECISIONS.md`: demo scope and fixture/corpus decisions.
 
 ## Entry Points
 
-- Future `src/nornikel_kg/domain/ids.py`: stable ID generation.
-- Future `src/nornikel_kg/domain/evidence.py`: evidence span invariants.
-- Future `src/nornikel_kg/domain/effects.py`: effect-claim invariants.
-- Future `src/nornikel_kg/adapters/duckdb/migrations/001_init.sql`: P0 ledger schema.
+- `DuckDBLedgerRepository.seed_synthetic_fixture`: reads committed synthetic CSV/Markdown, creates source/evidence/measurement/effect records, and writes DuckDB.
+- `DuckDBLedgerRepository.load_demo_packet`: returns the current evidence packet used by QA.
+- `DemoQAService.ask`: assembles the response from an `EvidenceLedgerPort` when provided, otherwise uses a deterministic fallback packet.
 
 ## Current Behavior
 
-The planned source of truth is a DuckDB scientific evidence ledger. The artifact bank stores raw files and parser outputs; DuckDB stores source registry, ingestion runs, artifacts, evidence spans, table rows/cells, normalized facts, graph node/edge tables, answer claims, evaluation results, and source security-label decisions.
+The implemented scaffold writes a synthetic DuckDB evidence ledger with `sources`, `evidence_spans`, `property_measurements`, `effect_claims`, and `answer_claims`. Runtime seeding happens through `get_ledger_repository()` using `DUCKDB_PATH` and `SYNTHETIC_SAMPLE_DIR`, defaulting to `data/catalog.duckdb` and `sample_docs/synthetic`.
 
 ## Contracts And Data
 
-Separate IDs are required: `source_id`, `artifact_id`, `span_id`, `extraction_run_id`, `fact_id`, and `claim_id`. `span_id` must never include `extraction_run_id`.
+Separate IDs are implemented for `source_id`, `artifact_id`, `span_id`, `fact_id`, and `claim_id`. `span_id` does not include `extraction_run_id`, and `tests/unit/test_ids.py` verifies whitespace-normalized span stability.
 
 Table rows and table cells are first-class evidence units. `EffectClaim` is required for "what effect" answers and must reference baseline/treated measurements or be marked qualitative-only.
 
-The canonical graph path uses expanded materials-science context: `Experiment -> Sample -> Material`, `Experiment -> ProcessingRegime -> ProcessStep`, `Experiment -> PropertyMeasurement -> Property`, and `PropertyMeasurement -> EvidenceSpan -> Document`. `EffectClaim` links baseline and treated measurements.
+Current canonical demo graph path is linear for UI clarity: `Material -> Experiment -> Regime -> Step -> Measurement -> Property -> Evidence -> Document`.
 
 P0 demo dictionaries cover Ni-Cu, Cu-Ni, and Ni-Cr-Mo alloys; annealing, aging, cold rolling, solution treatment/quench, welding/cladding; and hardness, tensile strength, elongation, conductivity, corrosion rate, grain size, porosity/cracking, and phase fraction.
 
@@ -53,5 +58,5 @@ Freeze ID generation before writing ingestion code. Add migrations and domain te
 
 ## Verification
 
-- Future `make test`: must include ID stability, evidence span, unit normalization, and answer claim verifier tests.
-- Future `make eval`: must report citation coverage, unsupported claim count, table-row recall, and source-label leak count.
+- `make ci`: runs ruff, mypy, pytest, frontend typecheck, and frontend build.
+- `make eval`: verifies citation coverage, unsupported claim count, source-label leak count, prompt-injection fixture count, experiment count, and evidence count for the current synthetic packet.
