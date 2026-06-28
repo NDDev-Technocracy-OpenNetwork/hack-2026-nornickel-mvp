@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 1ad13b2 chore: add ci docker docs and memory sync
+Last commit: d60d647 fix: resolve runtime project root in containers
 Scope: Makefile; .github/workflows/ci.yml; docker-compose.yml; docs/deployment/fa-nddev.md; apps/web/; services/api/
 Area: RELEASE
 -->
@@ -40,6 +40,9 @@ runtime secrets are expected to live outside git.
 The web container serves the Vite build through Nginx and proxies `/api/` to the FastAPI
 container. `VITE_API_BASE_URL` defaults to `/api` for container deployment and can be set to
 `http://127.0.0.1:8000` during local dev.
+
+The API container sets `PROJECT_ROOT=/app`; `src/nornikel_kg/services/runtime.py` uses that
+root to resolve `data/` and `sample_docs/` after the package is installed into site-packages.
 
 ## Invariants
 
