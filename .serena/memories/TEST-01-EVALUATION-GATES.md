@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: 259ecc6 feat: add react evidence workbench
+Last commit: 1e5e37a fix: harden ledger uploads and runtime init
 Scope: Makefile; tests/; scripts/run_eval.py; eval/; .github/workflows/ci.yml
 Area: TEST
 -->
@@ -28,13 +28,16 @@ Capture required verification and acceptance gates for the MVP.
 
 ## Current Behavior
 
-The scaffold has executable gates. `make ci` runs backend ruff/mypy/pytest and frontend TypeScript/build. `scripts/run_eval.py` uses the runtime QA service and synthetic DuckDB ledger to verify citation and safety metrics. CI runs the same backend and frontend checks on pull requests and pushes to `main`.
+The scaffold has executable gates. `make ci` runs backend ruff/mypy/pytest and frontend TypeScript/build. `scripts/run_eval.py` uses the runtime QA service and synthetic DuckDB ledger to verify citation and safety metrics for the ideal question, missing-conductivity gap, and method-mismatch conflict. CI runs the same backend and frontend checks on pull requests and pushes to `main`.
 
 ## Contracts And Data
 
 P0 gold questions must include one polished ideal scenario plus direct material-regime-property questions, comparison questions, provenance questions, contradiction questions, gap questions, negative controls, source-label controls, and prompt-injection controls.
 
 Non-negotiable demo gates are `unsupported_claim_count = 0` and `source_label_leak_count = 0`.
+
+Regression coverage includes source upload/evidence listing, thread-safe first repository build,
+and preservation of seeded source facts when an overlapping CSV is uploaded.
 
 ## Invariants
 
@@ -52,4 +55,5 @@ When new ingestion/retrieval behavior is added, extend `eval/gold_questions.yml`
 - `make eval`: fixture QA metrics.
 - `docker compose config`: Compose validation.
 - Secret scan: `rg` command used in task excludes lockfiles/runtime dirs and checks for non-placeholder secrets.
-- Browser validation: Playwright CLI desktop and mobile screenshots under ignored `browser/`.
+- Browser validation: Playwright CLI desktop/mobile snapshots and screenshots under ignored `browser/`;
+  latest local proof paths use the `browser/ledger-fixed-*` prefix.

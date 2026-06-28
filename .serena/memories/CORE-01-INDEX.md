@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: e7e92ec docs: record fa deployment contract
+Last commit: 1e5e37a fix: harden ledger uploads and runtime init
 Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml
 Area: CORE
 -->
@@ -37,11 +37,19 @@ Index the durable project knowledge for the Nornikel Materials KG Search hackath
 
 ## Current Behavior
 
-The repository contains a working P0 scaffold on `main`: FastAPI API, React/Vite workbench, DuckDB-backed synthetic evidence ledger, deterministic evidence-backed QA response, fixtures/eval, CI workflow, Docker Compose configuration, and deployment notes for `fa.nddev.asia`.
+The repository contains a working P0 scaffold: FastAPI API, React/Vite workbench, DuckDB-backed
+evidence ledger, CSV/Markdown upload API, deterministic evidence-backed QA response,
+fixtures/eval, CI workflow, Docker Compose configuration, and deployment notes for
+`fa.nddev.asia`.
 
 ## Contracts And Data
 
-Current P0 flow is: React/Vite workbench -> FastAPI `/qa/ask` -> DuckDB-backed synthetic evidence ledger -> deterministic evidence packet -> answer claim verification -> experiment table, evidence cards, graph path, conflict, gap, and evaluation/security metrics. Qdrant, Docling, NetworkX, and LiteLLM are prepared as modular next adapters, not yet wired into the scaffold runtime.
+Current P0 flow is: React/Vite workbench -> FastAPI `/qa/ask` -> DuckDB-backed evidence
+ledger -> deterministic evidence packet -> answer claim verification -> experiment table,
+evidence cards, graph path, conflict, gap, and evaluation/security metrics. Source upload flow is:
+React artifact bank -> FastAPI `/sources/upload` -> DuckDB source/evidence/fact writes ->
+`/sources` and `/sources/{source_id}/evidence` listing. Qdrant, Docling/OCR, NetworkX, and
+LiteLLM are prepared as modular next adapters, not yet wired into the scaffold runtime.
 
 ## Invariants
 

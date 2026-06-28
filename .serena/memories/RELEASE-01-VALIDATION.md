@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
-Last commit: e7e92ec docs: record fa deployment contract
+Last commit: 1e5e37a fix: harden ledger uploads and runtime init
 Scope: Makefile; .github/workflows/ci.yml; docker-compose.yml; docs/deployment/fa-nddev.md; apps/web/; services/api/
 Area: RELEASE
 -->
@@ -25,6 +25,8 @@ Capture the current validation and rollout contract for the server-first MVP sca
 - `make eval`: deterministic fixture evaluation.
 - `docker compose config`: Compose syntax validation without requiring `.env`.
 - `docker compose up --build`: containerized API, web, and Qdrant run path.
+- Playwright CLI session: validates React workbench query/upload flow and mobile layout with ignored
+  `browser/ledger-fixed-*` artifacts.
 
 ## Current Behavior
 
@@ -72,4 +74,5 @@ dependencies, update `uv.lock` and run backend tests.
 - `docker compose config`: proves Compose syntax.
 - Server smoke: `curl -fsS https://fa.nddev.asia/api/health` and public
   `POST https://fa.nddev.asia/api/qa/ask` prove the deployed reverse proxy and API route.
-- Browser validation: local ignored screenshots under `browser/` prove the workbench desktop/mobile flow.
+- Browser validation: local ignored screenshots under `browser/` prove the workbench desktop query,
+  CSV upload, source counts, evidence cards, graph path, and mobile layout.
