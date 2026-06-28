@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 6d5f606 docs: sync /qa ask filter contract in memories
+Last commit: f06fb3a feat: harden source lifecycle with validated upload and delete
 Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/; src/nornikel_kg/services/qa_service.py; src/nornikel_kg/services/runtime.py; sample_docs/synthetic/; eval/
 Area: DATA
 -->
@@ -30,6 +30,10 @@ Capture evidence identity, artifact memory, scientific schemas, and answer-claim
 - `DuckDBLedgerRepository.ingest_source_bytes`: ingests uploaded CSV or Markdown/text sources into DuckDB.
 - `DuckDBLedgerRepository.list_sources`: returns source summaries with evidence and measurement counts.
 - `DuckDBLedgerRepository.list_evidence_spans`: returns evidence spans globally or for one source.
+- `DuckDBLedgerRepository.get_source`: returns a source summary by id or `None`.
+- `DuckDBLedgerRepository.delete_source`: hard-deletes a source with related source/evidence/fact records and returns success flag.
+- `DuckDBLedgerRepository.ingest_source_bytes`: now wraps seed/upload in explicit transaction boundaries and raises
+  `SourceIngestError` on decode/schema violations.
 - `DuckDBLedgerRepository.load_demo_packet`: returns the current evidence packet used by QA.
 - `DemoQAService.ask`: assembles the response from an `EvidenceLedgerPort` when provided, otherwise uses a deterministic fallback packet.
 
@@ -47,6 +51,7 @@ CSV uploads must include `experiment_id`, `material`, `regime`, `temperature_c`,
 `atmosphere`, `property`, `method`, `baseline_value`, `treated_value`, `unit`, and `effect`.
 Uploaded rows become `table_row` evidence spans plus source-scoped measurements/effects. Markdown
 or text uploads are stored as evidence spans without deriving measurements in P0.
+Upload accepts `.csv`, `.md`, `.markdown`, `.txt`, `.text`; other extensions are rejected.
 
 `DemoQAService` now applies `AskRequest.filters` before ranking experiments; filtered
 queries can constrain by `source_ids`, `material`/`material_name`, `property`/`property_name`,

@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 6d5f606 docs: sync /qa ask filter contract in memories
+Last commit: f06fb3a feat: harden source lifecycle with validated upload and delete
 Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml
 Area: CORE
 -->
@@ -50,8 +50,10 @@ Current P0 flow is: React/Vite workbench -> FastAPI `/qa/ask` -> DuckDB-backed e
 ledger -> deterministic evidence packet -> answer claim verification -> experiment table,
 evidence cards, graph path, conflict, gap, and evaluation/security metrics. Source upload flow is:
 React artifact bank -> FastAPI `/sources/upload` -> DuckDB source/evidence/fact writes ->
-`/sources` and `/sources/{source_id}/evidence` listing. Qdrant, Docling/OCR, NetworkX, and
-LiteLLM are prepared as modular next adapters, not yet wired into the scaffold runtime.
+`/sources` and `/sources/{source_id}/evidence` listing. Source lifecycle now also supports
+hard delete via `DELETE /sources/{source_id}` and validates upload extension at API entry.
+Qdrant, Docling/OCR, NetworkX, and LiteLLM are prepared as modular next adapters,
+not yet wired into the scaffold runtime.
 `/qa/ask` honors typed request filters when selecting experiments, including `source_ids`,
 `source_id`, `material`/`material_name`, `property`/`property_name`, `regime`/`regime_id`,
 and `experiment_id`. Unknown filter keys are rejected at request validation.

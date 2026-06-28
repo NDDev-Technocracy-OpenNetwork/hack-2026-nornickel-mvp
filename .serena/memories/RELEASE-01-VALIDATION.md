@@ -1,6 +1,6 @@
 <!-- Memory Metadata
-Last updated: 2026-06-28
-Last commit: 273c5f5 docs: sync ledger ingestion knowledge
+Last updated: 2026-06-29
+Last commit: f06fb3a feat: harden source lifecycle with validated upload and delete
 Scope: Makefile; .github/workflows/ci.yml; docker-compose.yml; docs/deployment/fa-nddev.md; apps/web/; services/api/
 Area: RELEASE
 -->

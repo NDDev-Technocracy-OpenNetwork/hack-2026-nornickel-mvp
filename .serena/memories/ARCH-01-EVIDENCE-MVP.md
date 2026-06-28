@@ -1,6 +1,6 @@
 <!-- Memory Metadata
-Last updated: 2026-06-28
-Last commit: 273c5f5 docs: sync ledger ingestion knowledge
+Last updated: 2026-06-29
+Last commit: f06fb3a feat: harden source lifecycle with validated upload and delete
 Scope: apps/web/; services/api/; src/nornikel_kg/; docker-compose.yml; .github/workflows/ci.yml; .serena/newproj/nornikel-kg-search/
 Area: ARCH
 -->
@@ -30,12 +30,14 @@ Capture the P0 architecture contract for the evidence-first materials research w
 
 ## Current Behavior
 
-P0 scaffold uses React 19/Vite 8/TypeScript for the workbench, FastAPI for the API, Python 3.12 for backend/scientific code, and DuckDB as the current evidence ledger. Runtime seeds the synthetic fixture and can ingest CSV/Markdown sources through `/sources/upload`. Qdrant is present in Compose and dependency configuration but is not yet used by the QA runtime. NetworkX, Docling/OCR, and LiteLLM/OpenAI-compatible LLM/embedding calls are P1 adapter wiring paths. Neo4j, PostgreSQL, queues, and object storage remain deferred migrations.
+P0 scaffold uses React 19/Vite 8/TypeScript for the workbench, FastAPI for the API, Python 3.12 for backend/scientific code, and DuckDB as the current evidence ledger. Runtime seeds the synthetic fixture and can ingest CSV/Markdown sources through `/sources/upload`; source lifecycle now also supports
+`DELETE /sources/{source_id}` and safe evidence listing at `/sources/{source_id}/evidence`.
+Qdrant is present in Compose and dependency configuration but is not yet used by the QA runtime. NetworkX, Docling/OCR, and LiteLLM/OpenAI-compatible LLM/embedding calls are P1 adapter wiring paths. Neo4j, PostgreSQL, queues, and object storage remain deferred migrations.
 
 ## Contracts And Data
 
 Current implemented port: `EvidenceLedgerPort`. It covers source listing, evidence listing,
-source upload, and evidence packet loading.
+source upload, source deletion, and evidence packet loading.
 
 Planned ports remain: `DocumentParserPort`, `ArtifactStorePort`, `MetadataStorePort`, `VectorIndexPort`, `GraphStorePort`, `EmbeddingModelPort`, `SparseEncoderPort`, `LLMExtractorPort`, `SecurityLabelPolicyPort`, and `EvaluationStorePort`.
 

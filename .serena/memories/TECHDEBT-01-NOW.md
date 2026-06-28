@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 6d5f606 docs: sync /qa ask filter contract in memories
+Last commit: f06fb3a feat: harden source lifecycle with validated upload and delete
 Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; docs/deployment/fa-nddev.md; tests/
 Area: TECHDEBT
 -->
@@ -36,6 +36,10 @@ QA requests now support filter-aware experiment selection with fallback behavior
 to filtered result sets.
 `/qa/ask` now uses a typed `AskFilters` contract and rejects unknown filter keys at request parse time.
 Scalar filter values are coerced to one-element lists to preserve API ergonomics.
+Source lifecycle was hardened with:
+- upload extension validation (`.csv`, `.md`, `.markdown`, `.txt`, `.text` only),
+- transactional upload/seed paths in DuckDB repository,
+- 404-aware source lookup and delete endpoints to avoid silent partial states.
 
 FastAPI tests pass but emit a Starlette deprecation warning that `fastapi.testclient` currently
 uses `httpx` and may require `httpx2` in a future dependency cycle.

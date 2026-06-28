@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 6d5f606 docs: sync /qa ask filter contract in memories
+Last commit: f06fb3a feat: harden source lifecycle with validated upload and delete
 Scope: Makefile; tests/; scripts/run_eval.py; eval/; .github/workflows/ci.yml
 Area: TEST
 -->
@@ -41,6 +41,10 @@ and preservation of seeded source facts when an overlapping CSV is uploaded.
 Additional coverage added for `/qa/ask` filter parsing:
 - scalar filter values are accepted (auto-coerced to single-element lists);
 - unknown filter keys are rejected with 422 validation errors.
+API contracts around source lifecycle now include:
+- `DELETE /sources/{source_id}` idempotent when source missing (404 expected).
+- invalid upload extension returns 400.
+- `/sources/{source_id}/evidence` returns 404 for missing source.
 
 ## Invariants
 
