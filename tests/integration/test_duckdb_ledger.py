@@ -36,3 +36,19 @@ def test_duckdb_ledger_ingests_uploaded_csv(tmp_path: Path) -> None:
     assert result.evidence_count == 1
     assert result.measurement_count == 1
     assert repository.list_evidence_spans(result.source.source_id)[0].span_type == "table_row"
+
+
+def test_uploaded_csv_does_not_steal_seeded_source_facts(tmp_path: Path) -> None:
+    repository = DuckDBLedgerRepository(tmp_path / "catalog.duckdb")
+    sample_dir = Path("sample_docs/synthetic")
+    repository.seed_synthetic_fixture(sample_dir)
+
+    result = repository.ingest_source_bytes(
+        filename="mechanical_properties.csv",
+        content=(sample_dir / "mechanical_properties.csv").read_bytes(),
+    )
+
+    sources = {source.title: source for source in repository.list_sources()}
+    assert sources["Synthetic Ni-Cu aging report"].measurement_count == 2
+    assert sources[result.source.title].measurement_count == 2
+    assert len(repository.load_demo_packet().experiments) == 4

@@ -239,6 +239,7 @@ class DuckDBLedgerRepository:
                 JOIN effect_claims e
                   ON m.experiment_id = e.experiment_id
                  AND m.property_id = e.property_id
+                 AND m.source_id = e.source_id
                 ORDER BY m.experiment_id, m.measurement_id
                 """
             ).fetchall()
@@ -441,6 +442,7 @@ class DuckDBLedgerRepository:
                 measurement_id=fact_id(
                     "measurement",
                     {
+                        "source_id": source_id,
                         "experiment_id": experiment_id,
                         "property": property_id,
                         "value": treated_value,
@@ -459,6 +461,7 @@ class DuckDBLedgerRepository:
             effect = EffectClaim(
                 effect_id=claim_id(
                     {
+                        "source_id": source_id,
                         "experiment_id": experiment_id,
                         "direction": direction,
                         "supporting_span_ids": measurement.supporting_span_ids,

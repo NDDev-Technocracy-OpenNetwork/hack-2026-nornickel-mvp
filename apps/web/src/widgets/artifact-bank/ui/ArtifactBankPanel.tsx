@@ -24,9 +24,10 @@ export function ArtifactBankPanel({
     if (!file) {
       return;
     }
+    const form = event.currentTarget;
     await onUpload(file);
     setFile(null);
-    event.currentTarget.reset();
+    form.reset();
   }
 
   return (
