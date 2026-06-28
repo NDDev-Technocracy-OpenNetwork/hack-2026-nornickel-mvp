@@ -10,6 +10,23 @@ export type EvidenceSpan = {
   security_label: string;
 };
 
+export type SourceSummary = {
+  source_id: string;
+  title: string;
+  document_type: string;
+  security_label: string;
+  status: string;
+  evidence_count: number;
+  measurement_count: number;
+};
+
+export type SourceIngestResponse = {
+  source: SourceSummary;
+  evidence_count: number;
+  measurement_count: number;
+  warnings: string[];
+};
+
 export type AnswerSentence = {
   sentence: string;
   supporting_span_ids: string[];
