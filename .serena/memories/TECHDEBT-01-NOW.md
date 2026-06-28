@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 5f6f8f2 chore: type ask filters for /qa ask requests
+Last commit: 6d5f606 docs: sync /qa ask filter contract in memories
 Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; docs/deployment/fa-nddev.md; tests/
 Area: TECHDEBT
 -->

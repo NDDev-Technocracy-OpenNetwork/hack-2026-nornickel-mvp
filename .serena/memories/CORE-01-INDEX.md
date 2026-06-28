@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 5f6f8f2 chore: type ask filters for /qa ask requests
+Last commit: 6d5f606 docs: sync /qa ask filter contract in memories
 Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml
 Area: CORE
 -->

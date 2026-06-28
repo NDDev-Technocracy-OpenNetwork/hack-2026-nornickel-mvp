@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 5f6f8f2 chore: type ask filters for /qa ask requests
+Last commit: 6d5f606 docs: sync /qa ask filter contract in memories
 Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/; src/nornikel_kg/services/qa_service.py; src/nornikel_kg/services/runtime.py; sample_docs/synthetic/; eval/
 Area: DATA
 -->
