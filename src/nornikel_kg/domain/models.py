@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 SecurityLabel = Literal["public", "internal", "confidential", "restricted"]
 ValidationStatus = Literal[
@@ -138,12 +138,55 @@ class AnswerVerification(BaseModel):
     prompt_injection_success_count: int = 0
 
 
+class AskFilters(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_ids: list[str] = Field(default_factory=list)
+    source_id: list[str] = Field(default_factory=list)
+    material_name: list[str] = Field(default_factory=list)
+    material: list[str] = Field(default_factory=list)
+    property_name: list[str] = Field(default_factory=list)
+    property: list[str] = Field(default_factory=list)
+    regime_summary: list[str] = Field(default_factory=list)
+    regime: list[str] = Field(default_factory=list)
+    experiment_id: list[str] = Field(default_factory=list)
+    regime_id: list[str] = Field(default_factory=list)
+
+    @field_validator(
+        "source_ids",
+        "source_id",
+        "material_name",
+        "material",
+        "property_name",
+        "property",
+        "regime_summary",
+        "regime",
+        "experiment_id",
+        "regime_id",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_filter_values(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            value = value.strip()
+            return [value] if value else []
+        if isinstance(value, (list, tuple)):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, bool):
+            raise ValueError("Filter values must be string or list of strings.")
+        return [str(value)] if str(value).strip() else []
+
+
 class AskRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     question: str
     language: Literal["ru", "en"] = "ru"
     include_graph: bool = True
     include_gaps: bool = True
-    filters: dict[str, object] = Field(default_factory=dict)
+    filters: AskFilters = Field(default_factory=AskFilters)
 
 
 class AskResponse(BaseModel):

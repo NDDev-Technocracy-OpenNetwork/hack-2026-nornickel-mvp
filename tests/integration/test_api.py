@@ -138,6 +138,58 @@ def test_qa_endpoint_can_filter_by_source_id_and_material(
     assert "NiFilter" in payload["experiments"][0]["material_name"]
 
 
+def test_qa_endpoint_accepts_scalar_filter_values(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+    csv_payload = (
+        "experiment_id,material,regime,temperature_c,duration_h,atmosphere,"
+        "property,method,baseline_value,treated_value,unit,effect\n"
+        "exp_filter_scalar,NiFilter,aging,700,8,air,Vickers hardness,HV10,210,220,HV,increase\n"
+    )
+    source_id = (
+        client.post(
+            "/sources/upload",
+            files={"file": ("filter_scalar_source.csv", csv_payload, "text/csv")},
+        )
+        .json()["source"]["source_id"]
+    )
+
+    response = client.post(
+        "/qa/ask",
+        json={
+            "question": "Что делали с NiFilter при старении 700 C 8 ч?",
+            "language": "ru",
+            "filters": {"source_ids": source_id, "material": "NiFilter"},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["experiments"]) == 1
+    assert payload["experiments"][0]["source_id"] == source_id
+
+
+def test_qa_endpoint_rejects_unknown_filter_key(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/qa/ask",
+        json={
+            "question": "Что делали по Ni-30Cu при старении 700 C 8 ч?",
+            "language": "ru",
+            "filters": {"unknown_key": ["x"]},
+        },
+    )
+
+    assert response.status_code == 422
+    assert "filters" in response.json()["detail"][0]["loc"]
+
+
 def test_qa_endpoint_source_filter_empty_result(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,

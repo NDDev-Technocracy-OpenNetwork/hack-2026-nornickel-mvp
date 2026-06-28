@@ -6,6 +6,7 @@ from nornikel_kg.domain.ids import claim_id, fact_id, source_id_from_bytes, stab
 from nornikel_kg.domain.ledger import EvidenceLedgerPacket
 from nornikel_kg.domain.models import (
     AnswerSentence,
+    AskFilters,
     AskRequest,
     AskResponse,
     EffectClaim,
@@ -225,11 +226,11 @@ class DemoQAService:
         *,
         question: str,
         experiments: list[ExperimentRow],
-        request_filters: dict[str, object] | None = None,
+        request_filters: AskFilters | None = None,
     ) -> list[ExperimentRow]:
         normalized_question = self._normalize(question)
         requested_property = self._requested_property(question)
-        has_request_filters = bool(request_filters)
+        has_request_filters = self._has_filter_constraints(request_filters)
         exact_materials = {
             self._normalize(experiment.material_name)
             for experiment in experiments
@@ -258,9 +259,9 @@ class DemoQAService:
     def _matches_filters(
         self,
         experiment: ExperimentRow,
-        filters: dict[str, object] | None,
+        filters: AskFilters | None,
     ) -> bool:
-        if not filters:
+        if not filters or self._is_filter_set_empty(filters):
             return True
         source_filter = self._list_filter_values(filters, "source_ids", "source_id")
         if source_filter and not self._matches_source_filter(experiment.source_id, source_filter):
@@ -295,31 +296,40 @@ class DemoQAService:
             return True
         return source_id is not None and source_id in allowed_source_ids
 
-    def _list_filter_values(self, filters: dict[str, object], *keys: str) -> set[str]:
+    def _has_filter_constraints(self, filters: AskFilters | None) -> bool:
+        if not filters:
+            return False
+        return not self._is_filter_set_empty(filters)
+
+    def _is_filter_set_empty(self, filters: AskFilters) -> bool:
+        return all(not self._list_filter_values(filters, key) for key in (
+            "source_ids",
+            "source_id",
+            "material_name",
+            "material",
+            "property_name",
+            "property",
+            "regime_summary",
+            "regime",
+            "experiment_id",
+            "regime_id",
+        ))
+
+    def _list_filter_values(self, filters: AskFilters, *keys: str) -> set[str]:
         for key in keys:
-            raw = filters.get(key)
-            if raw is None:
+            raw = getattr(filters, key, None)
+            if not raw:
                 continue
-            if isinstance(raw, str):
-                value = raw.strip()
-                return {value} if value else set()
-            if isinstance(raw, list | tuple):
-                return {
-                    str(item).strip()
-                    for item in raw
-                    if str(item).strip()
-                }
+            if isinstance(raw, list):
+                return {str(item).strip() for item in raw if str(item).strip()}
         return set()
 
-    def _text_filter_values(self, filters: dict[str, object], *keys: str) -> set[str]:
+    def _text_filter_values(self, filters: AskFilters, *keys: str) -> set[str]:
         for key in keys:
-            raw = filters.get(key)
-            if raw is None:
+            raw = getattr(filters, key, None)
+            if not raw:
                 continue
-            if isinstance(raw, str):
-                normalized = self._normalize(raw.strip())
-                return {normalized} if normalized else set()
-            if isinstance(raw, list | tuple):
+            if isinstance(raw, list):
                 normalized_values = {
                     self._normalize(str(item).strip())
                     for item in raw
