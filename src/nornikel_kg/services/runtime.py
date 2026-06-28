@@ -9,6 +9,14 @@ from nornikel_kg.services.qa_service import DemoQAService
 
 
 def project_root() -> Path:
+    configured_root = os.getenv("PROJECT_ROOT")
+    if configured_root:
+        return Path(configured_root).resolve()
+
+    current_directory = Path.cwd()
+    if (current_directory / "sample_docs").exists():
+        return current_directory
+
     return Path(__file__).resolve().parents[3]
 
 
