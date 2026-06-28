@@ -4,45 +4,114 @@ No scaffold code should be created until owner approval. After approval, use thi
 
 ```text
 .
+├── pyproject.toml
+├── uv.lock
+├── Makefile
+├── docker-compose.yml
+├── .env.example
 ├── apps
-│   ├── api
-│   │   ├── pyproject.toml
-│   │   ├── src/nornikel_kg_api
-│   │   │   ├── main.py
-│   │   │   ├── modules
-│   │   │   │   ├── sources
-│   │   │   │   ├── ingestion
-│   │   │   │   ├── entities
-│   │   │   │   ├── graph
-│   │   │   │   ├── retrieval
-│   │   │   │   ├── qa
-│   │   │   │   ├── gaps
-│   │   │   │   └── review
-│   │   │   └── shared
-│   │   └── tests
-│   └── workbench
-│       ├── pyproject.toml
-│       └── src/nornikel_kg_workbench
-│           ├── app.py
-│           ├── pages
-│           └── components
-├── packages
-│   ├── domain
-│   ├── ingestion
-│   ├── retrieval
-│   ├── graph
-│   ├── qa
-│   ├── evals
-│   └── schemas
-├── infra
-│   ├── docker-compose.mvp.yml
-│   ├── docker-compose.full.yml
-│   └── qdrant
+│   └── streamlit_app
+│       ├── Home.py
+│       ├── pages
+│       │   ├── 1_Import.py
+│       │   ├── 2_Artifact_Bank.py
+│       │   ├── 3_Extraction_Workbench.py
+│       │   ├── 4_Ask.py
+│       │   ├── 5_Graph.py
+│       │   └── 6_Evaluation.py
+│       └── components
+│           ├── evidence_card.py
+│           ├── experiment_table.py
+│           ├── graph_view.py
+│           └── metrics_panel.py
+├── services
+│   └── api
+│       ├── main.py
+│       ├── routes
+│       │   ├── ingest.py
+│       │   ├── query.py
+│       │   ├── evidence.py
+│       │   ├── graph.py
+│       │   └── eval.py
+│       └── schemas.py
+├── src
+│   └── nornikel_kg
+│       ├── domain
+│       │   ├── ids.py
+│       │   ├── models.py
+│       │   ├── evidence.py
+│       │   ├── materials.py
+│       │   ├── regimes.py
+│       │   ├── measurements.py
+│       │   ├── effects.py
+│       │   ├── conflicts.py
+│       │   ├── gaps.py
+│       │   └── answer_claims.py
+│       ├── ports
+│       │   ├── artifact_store.py
+│       │   ├── metadata_store.py
+│       │   ├── parser.py
+│       │   ├── vector_index.py
+│       │   ├── graph_store.py
+│       │   ├── embedding_model.py
+│       │   ├── sparse_encoder.py
+│       │   ├── llm_client.py
+│       │   └── acl_policy.py
+│       ├── adapters
+│       │   ├── artifact_fs
+│       │   ├── duckdb
+│       │   │   └── migrations
+│       │   │       └── 001_init.sql
+│       │   ├── docling
+│       │   ├── qdrant
+│       │   ├── networkx
+│       │   └── llm
+│       ├── pipelines
+│       │   ├── ingest.py
+│       │   ├── build_evidence.py
+│       │   ├── extract.py
+│       │   ├── normalize.py
+│       │   ├── index.py
+│       │   ├── answer.py
+│       │   ├── evaluate.py
+│       │   └── security_checks.py
+│       ├── services
+│       │   ├── ingestion_service.py
+│       │   ├── extraction_service.py
+│       │   ├── indexing_service.py
+│       │   ├── qa_service.py
+│       │   ├── graph_service.py
+│       │   └── evaluation_service.py
+│       └── resources
+│           ├── dictionaries
+│           │   ├── materials.yml
+│           │   ├── properties.yml
+│           │   ├── regimes.yml
+│           │   ├── units.yml
+│           │   ├── equipment.yml
+│           │   └── teams.yml
+│           ├── prompts
+│           │   ├── extract_fact.json.md
+│           │   ├── answer_from_evidence.md
+│           │   └── verify_claims.md
+│           └── fixtures
+│               ├── gold_questions.yml
+│               ├── adversarial_questions.yml
+│               └── expected_spans.yml
 ├── data
-│   ├── README.md
-│   └── sample
-├── artifacts
+│   ├── .gitkeep
+│   ├── catalog.duckdb
+│   ├── artifacts
+│   └── qdrant_storage
+├── eval
+│   ├── gold_questions.yml
+│   ├── adversarial_questions.yml
+│   └── expected_spans.yml
+├── sample_docs
 │   └── README.md
+├── tests
+│   ├── unit
+│   └── integration
 ├── docs
 │   ├── architecture
 │   └── demo
@@ -52,15 +121,13 @@ No scaffold code should be created until owner approval. After approval, use thi
 
 ## Module Boundaries
 
-- `sources`: source registry and source spans.
-- `ingestion`: parse, chunk, extract, resolve, index jobs.
-- `entities`: canonical entity lookup and pages.
-- `graph`: GraphStore port plus NetworkX and Neo4j adapters.
-- `retrieval`: vector/hybrid search and reranking.
-- `qa`: query planning, evidence assembly, answer generation.
-- `gaps`: missing data and conflict analysis.
-- `review`: human validation workflow.
-- `shared`: settings, auth, logging, errors, persistence interfaces.
+- `domain`: stable scientific schemas and invariants.
+- `ports`: dependency boundaries for stores, parsers, models, auth, graph, and retrieval.
+- `adapters`: concrete MVP-lite implementations.
+- `pipelines`: executable ingestion, evidence, extraction, indexing, QA, evaluation, and security flows.
+- `services`: application service orchestration used by API and Streamlit.
+- `apps/streamlit_app`: judge-facing workbench only.
+- `services/api`: stable API contracts only; keep business logic in `src/nornikel_kg/services`.
 
 ## Adapter Rule
 
@@ -68,11 +135,20 @@ Every external dependency must sit behind a port:
 
 - `ArtifactStore`: local filesystem first, S3-compatible later.
 - `MetadataStore`: DuckDB first, PostgreSQL later.
-- `GraphStore`: NetworkX first, Neo4j later.
+- `GraphStore`: DuckDB edge tables plus NetworkX first, Neo4j later.
 - `VectorStore`: Qdrant first, OpenSearch/pgvector later only if required.
+- `DocumentParser`: Docling first, parser bakeoff alternatives later.
 - `ModelProvider`: configurable hosted or local model.
 - `EmbeddingProvider`: dense and sparse embedding providers.
 - `AuthProvider`: local stub first, SSO later.
+
+## Required Make Targets
+
+- `make install`: install local development dependencies.
+- `make test`: run unit and integration tests.
+- `make ingest-fixtures`: ingest curated sample documents.
+- `make eval`: run gold and adversarial evaluation.
+- `make demo`: start the Streamlit workbench and required local services.
 
 ## Data Directory Rule
 
@@ -83,17 +159,26 @@ Do not commit internal corpora. Only commit synthetic sample data and schema fix
 Runtime artifact memory bank files are generated from source corpora and must not be committed unless they are synthetic fixtures. The intended shape is:
 
 ```text
-artifacts/
+data/artifacts/
 └── sources/
     └── src_...
-        ├── original/
-        ├── markdown/document.md
-        ├── structured/document.json
+        ├── raw/
+        ├── manifest.json
+        ├── docling/document.md
+        ├── docling/document.json
+        ├── pages/
         ├── tables/
-        ├── images/
-        └── manifest.json
+        ├── figures/
+        ├── chunks/
+        └── extraction/
 ```
 
 ## Migration Direction
 
-Start modular monolith. Extract workers or services only when runtime pressure proves it necessary.
+Start with a modular Python application. Promote adapters only when the P0 evidence loop works and the scale trigger is real:
+
+- DuckDB to PostgreSQL for multi-user review/audit.
+- NetworkX to Neo4j for durable graph queries and Cypher.
+- Streamlit to React for polished production UX.
+- In-process jobs to worker queues for long ingestion.
+- Local artifacts to object storage for shared deployment.

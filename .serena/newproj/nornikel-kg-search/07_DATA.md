@@ -8,12 +8,16 @@
 - Alloy: named alloy or composition variant.
 - Element: chemical element.
 - Composition: element percentages, uncertainty, source.
+- Sample: physical specimen linked to material, batch/heat, and experiment.
+- BatchOrHeat: production or lab batch identity when available.
 
 ### Experiment And Sample
 
 - Experiment: planned or executed research activity.
 - Sample: physical specimen or batch.
 - ProcessingRegime: temperature, pressure, atmosphere, time, cooling, deformation, heat treatment, or other process parameters.
+- ProcessStep: ordered operation inside a multi-step regime.
+- ProcessParameter: typed parameter such as temperature, duration, pressure, deformation percentage, atmosphere, or cooling.
 - Equipment: machine or measurement device.
 - Installation: physical setup or facility.
 
@@ -21,7 +25,8 @@
 
 - Property: tensile strength, hardness, corrosion resistance, phase composition, conductivity, etc.
 - PropertyMeasurement: value, unit, method, uncertainty, conditions, direction of change.
-- Effect: increase, decrease, no change, threshold behavior, tradeoff, or qualitative effect.
+- EffectClaim: baseline/treated comparison or qualitative effect: increase, decrease, no change, mixed, unknown.
+- ConflictGroup: grouped disagreement across measurements, methods, conditions, or extraction uncertainty.
 
 ### Knowledge Objects
 
@@ -61,6 +66,38 @@ Every fact-like node or relationship stores:
 
 This follows the PROV-O idea that information is produced by activities, derived from entities, and associated with agents.
 
+## Identifier Policy
+
+Do not collapse identities:
+
+- `source_id`: stable raw document identity from raw bytes.
+- `artifact_id`: parsed object identity from source, artifact type, parser profile, and locator.
+- `span_id`: stable evidence anchor from source, artifact type, page/table/row/bbox locator, and visible-content hash.
+- `extraction_run_id`: mutable run identity.
+- `fact_id`: normalized fact identity.
+- `claim_id`: extraction or answer claim identity.
+
+Never include `extraction_run_id` in `span_id`; store parser changes in `evidence_span_versions`.
+
+## Confidence Model
+
+Use separate confidence dimensions:
+
+- `evidence_confidence`: parser/OCR/table extraction confidence.
+- `extraction_confidence`: confidence that a fact is present in the span.
+- `normalization_confidence`: confidence that raw entity/unit maps to canonical entity/unit.
+
+Validation status values:
+
+- raw;
+- extracted;
+- normalized;
+- validated_rule;
+- validated_manual;
+- rejected;
+- conflict;
+- needs_review.
+
 ## Entity Resolution
 
 Resolution layers:
@@ -93,19 +130,17 @@ Gap records should reference the expected entity pair or path and the evidence t
 The first working product must support this canonical path:
 
 ```text
-Material
-  <-[:USES_MATERIAL]- Experiment
-  -[:APPLIES_REGIME]-> ProcessingRegime
-  -[:HAS_MEASUREMENT]-> PropertyMeasurement
-  -[:OF_PROPERTY]-> Property
-PropertyMeasurement
-  -[:SUPPORTED_BY]-> EvidenceSpan
-EvidenceSpan
-  -[:FROM_DOCUMENT]-> Document
-Experiment
-  -[:PERFORMED_BY]-> Team
-Experiment
-  -[:USED_EQUIPMENT]-> Equipment
+(Experiment)-[:USES_SAMPLE]->(Sample)
+(Sample)-[:MADE_OF]->(Material)
+(Material)-[:HAS_COMPOSITION]->(MaterialComposition)
+(Experiment)-[:APPLIES_REGIME]->(ProcessingRegime)
+(ProcessingRegime)-[:HAS_STEP]->(ProcessStep)
+(Experiment)-[:HAS_MEASUREMENT]->(PropertyMeasurement)
+(PropertyMeasurement)-[:OF_PROPERTY]->(Property)
+(PropertyMeasurement)-[:SUPPORTED_BY]->(EvidenceSpan)
+(EvidenceSpan)-[:FROM_DOCUMENT]->(Document)
+(EffectClaim)-[:COMPARES_BASELINE]->(PropertyMeasurement)
+(EffectClaim)-[:COMPARES_TREATED]->(PropertyMeasurement)
 ```
 
 All other graph relationships are secondary until this path works end to end.
@@ -139,6 +174,8 @@ Vector payload filters:
 - Measurements require units.
 - Regimes require typed parameters where available.
 - Claims require source spans.
+- Effect claims require baseline/treated measurements or `qualitative_only`.
 - Final-answer claims require `EvidenceSpan`; generic Markdown chunks are not enough.
+- Table rows and table cells are first-class evidence, not Markdown-only text.
 - Conclusions require either source support or reviewer authoring.
 - Decisions require actor, date, rationale, and linked evidence or gap.

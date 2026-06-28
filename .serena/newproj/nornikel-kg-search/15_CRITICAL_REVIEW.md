@@ -118,6 +118,18 @@ Fix: MVP-lite now uses DuckDB for metadata/analytics, NetworkX for graph paths, 
 
 Disposition: must-fix, fixed in planning docs.
 
+### High: Evidence Ledger Needed To Be More Concrete
+
+Confidence: 95
+
+Evidence: External review correctly identified that the core system is DuckDB evidence ledger plus Qdrant retrieval, not a RAG app with a side database.
+
+Impact: Without explicit ledger tables, ID policy, and answer claim verification, the scaffold could still drift into opaque LLM answers.
+
+Fix: Added `18_IMPLEMENTATION_SPEC.md`, expanded the MVP blueprint, added answer claim ledger API, and documented ID/confidence/ACL/evaluation contracts.
+
+Disposition: must-fix, fixed in planning docs.
+
 ## Must-Have Implementation Gates
 
 1. Parse representative sources into artifact bundles.

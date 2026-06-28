@@ -19,6 +19,17 @@ The system handles internal research documents, experiment data, staff/lab metad
 - The API must enforce object-level authorization, not only route-level access.
 - Audit every source access and answer run.
 
+## Retrieval ACL Sequence
+
+1. Resolve user identity, groups, project, and confidentiality clearance.
+2. Query DuckDB for allowed `source_id` and `span_id` values.
+3. Apply Qdrant payload filters for tenant, allowed source IDs, confidentiality, and allowed groups.
+4. Rejoin Qdrant candidate unit IDs back to DuckDB.
+5. Drop any candidate whose source/span is not allowed.
+6. Build LLM context only from allowed evidence.
+7. During graph expansion, traverse only allowed evidence-backed edges.
+8. Verify cited spans are still allowed before returning the answer.
+
 ## LLM Controls
 
 - Treat source documents as untrusted input.
@@ -29,6 +40,7 @@ The system handles internal research documents, experiment data, staff/lab metad
 - Redact or block classified content if hosted LLMs are not approved.
 - Store prompt/response metadata only if allowed by data policy.
 - Never include inaccessible source existence, filenames, snippets, embeddings, or graph paths in user-visible answers unless policy explicitly allows disclosure of restricted-result counts.
+- Flag but preserve source spans containing prompt-injection-like text such as "ignore previous instructions", "system prompt", "do not cite", "send this data", "exfiltrate", or hidden OCR instructions.
 
 ## Data Handling
 
@@ -54,6 +66,8 @@ MVP checks:
 - object-level filtering tests;
 - retrieval-layer ACL tests for vector payloads and graph traversal;
 - prompt-injection regression examples;
+- restricted-source-in-context checks;
+- unsupported-claim blocking checks;
 - source upload validation;
 - secret scan before any commit;
 - log review for sensitive data leakage.

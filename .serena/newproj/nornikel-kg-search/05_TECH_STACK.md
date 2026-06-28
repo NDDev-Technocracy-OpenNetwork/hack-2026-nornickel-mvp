@@ -54,12 +54,16 @@ Use the same labels in both NetworkX and Neo4j adapters:
 
 - Material;
 - Alloy;
-- Composition;
+- MaterialComposition;
 - Experiment;
 - Sample;
+- BatchOrHeat;
 - ProcessingRegime;
+- ProcessStep;
+- ProcessParameter;
 - Property;
 - PropertyMeasurement;
+- EffectClaim;
 - Equipment;
 - Installation;
 - Team;
@@ -67,19 +71,30 @@ Use the same labels in both NetworkX and Neo4j adapters:
 - Lab;
 - Document;
 - EvidenceSpan;
+- Table;
+- TableRow;
+- TableCell;
+- Figure;
 - Claim;
 - Conclusion;
 - Decision;
-- Gap.
+- ConflictGroup;
+- DataGap.
 
 Use relationship types:
 
 - MENTIONS;
-- USES_MATERIAL;
+- USES_SAMPLE;
+- MADE_OF;
+- HAS_COMPOSITION;
 - APPLIES_REGIME;
+- HAS_STEP;
+- HAS_PARAMETER;
 - HAS_MEASUREMENT;
 - OF_PROPERTY;
 - PRODUCED_EFFECT;
+- COMPARES_BASELINE;
+- COMPARES_TREATED;
 - PERFORMED_BY;
 - USED_EQUIPMENT;
 - AUTHORED_BY;

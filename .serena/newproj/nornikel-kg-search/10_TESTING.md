@@ -38,13 +38,20 @@ Metrics:
 - answer faithfulness;
 - unsupported claim count;
 - gap detection precision.
+- ACL leak count.
+- restricted source in context count.
+- prompt injection success count.
 
 P0 pass thresholds for demo:
 
 - 100% of answer claims cite an `EvidenceSpan`.
 - At least 80% Recall@10 on the curated demo QA set.
+- At least 75% TableRowRecall@10 on table-backed questions.
+- At least 85% numeric value + unit accuracy on curated numeric facts.
+- At least 80% effect direction accuracy on curated effect claims.
 - Zero final-answer claims from chunks without stable span mapping.
 - Zero inaccessible sources in generated answer context.
+- Zero prompt-injection fixture successes.
 
 ## Extraction Evaluation
 
@@ -80,5 +87,8 @@ Before demo:
 - QA gold set report generated;
 - no uncited answer in test set;
 - no source access bypass in authorization tests;
+- no restricted source in answer context;
+- no unsupported generated answer claims;
+- adversarial prompt-injection fixtures pass;
 - Docker Compose starts from clean checkout;
 - seed dataset import is reproducible.

@@ -38,6 +38,18 @@ Domain Ports
 Docling artifacts + extraction pipeline + QA/evaluation
 ```
 
+## System Of Record
+
+DuckDB is the P0 system of record.
+
+- The artifact memory bank stores raw files and parser outputs.
+- DuckDB stores source registry, ingestion runs, artifact metadata, evidence spans, dictionaries, normalized facts, graph node/edge tables, answer claims, evaluation results, and ACL decisions.
+- Qdrant retrieves candidate evidence units only; it is never authoritative for facts or provenance.
+- NetworkX materializes graph paths from DuckDB node/edge tables on demand; it is not persistent graph state.
+- Streamlit is the workbench; it must call application services and not perform long-running ingestion inside page reruns.
+
+If DuckDB and Qdrant disagree, DuckDB wins.
+
 ## Why This Is The Right MVP Shape
 
 - It is buildable quickly: one Python stack plus Qdrant.
@@ -53,18 +65,24 @@ Docling artifacts + extraction pipeline + QA/evaluation
 Owns schemas and invariants:
 
 - Material;
+- MaterialComposition;
+- Sample;
 - Experiment;
 - ProcessingRegime;
+- ProcessStep;
 - Property;
 - PropertyMeasurement;
+- EffectClaim;
 - EvidenceSpan;
 - Document;
-- Claim;
+- ConflictGroup;
 - Gap.
 
 Rules:
 
 - measurements require units;
+- table rows and table cells are first-class evidence;
+- effect claims require baseline/treated measurements or `qualitative_only`;
 - final-answer claims require `EvidenceSpan`;
 - graph path uses the canonical relationship names;
 - model output is candidate data until validated.
@@ -106,7 +124,8 @@ Owns evidence search:
 
 Owns typed paths:
 
-- build NetworkX graph from validated facts;
+- store graph nodes/edges in DuckDB;
+- build NetworkX `MultiDiGraph` from DuckDB facts on demand;
 - return path and neighborhood JSON;
 - keep Neo4j adapter contract ready.
 
@@ -163,21 +182,81 @@ Owns proof:
 ### Evaluation
 
 - run demo questions;
-- show Recall@10, citation coverage, unsupported claim count.
+- show Recall@10, citation coverage, unsupported claim count, ACL leaks, and prompt-injection fixture status.
+
+## P0 ID Policy
+
+Use separate identifiers:
+
+- `source_id`: stable raw document identity.
+- `artifact_id`: parsed artifact identity.
+- `span_id`: stable evidence anchor.
+- `extraction_run_id`: mutable parser/extraction run identity.
+- `fact_id`: normalized extracted fact identity.
+- `claim_id`: answer or effect claim identity.
+
+Rules:
+
+- Never include `extraction_run_id` in `span_id`.
+- Generate `source_id` from raw file bytes.
+- Generate `span_id` from source ID, artifact type, page/table/row/bbox locator, and normalized visible-content hash.
+- Store parser upgrades in `evidence_span_versions` instead of overwriting old evidence.
+
+## P0 Evidence Unit Types
+
+Index and display these separately:
+
+- Markdown section chunk;
+- table row;
+- table cell;
+- extracted fact;
+- effect claim;
+- material card;
+- regime card;
+- experiment summary;
+- figure caption/OCR;
+- decision/conclusion snippet;
+- data gap record.
+
+Document chunks alone are insufficient for the materials-science question.
+
+## Answer Assembly Contract
+
+The application prepares an `AllowedEvidencePacket` before the LLM is called:
+
+- query slots;
+- allowed experiments;
+- measurements;
+- effect claims;
+- evidence spans;
+- graph paths;
+- conflicts;
+- gaps.
+
+The LLM may only summarize this packet. It cannot introduce facts outside the packet.
+
+Final answer output must be claim-led:
+
+- every sentence has `supporting_span_ids`;
+- every experiment-table row has evidence IDs;
+- unsupported claim count must be zero for demo answers;
+- answers with unsupported claims are blocked or downgraded.
 
 ## Build Order
 
 1. Domain schemas and ports.
-2. Local artifact memory bank.
-3. DuckDB metadata store.
+2. DuckDB schema and migrations.
+3. Local artifact memory bank.
 4. Docling parser adapter.
-5. EvidenceSpan generation.
-6. Dictionary/rule/table extraction.
-7. Qdrant index and hybrid retrieval.
-8. NetworkX graph adapter.
-9. QA answer assembler.
-10. Streamlit workbench.
-11. Evaluation report.
+5. Stable EvidenceSpan generation.
+6. Table-first evidence extraction.
+7. Dictionary/rule/entity normalization.
+8. EffectClaim and conflict/gap analyzers.
+9. Qdrant index and hybrid retrieval.
+10. NetworkX graph adapter from DuckDB node/edge tables.
+11. QA answer assembler and claim verifier.
+12. Streamlit workbench.
+13. Evaluation/security dashboard.
 
 ## Deferral List
 

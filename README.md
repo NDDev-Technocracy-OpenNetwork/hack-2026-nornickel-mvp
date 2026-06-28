@@ -16,4 +16,7 @@ Current implementation recommendation:
 
 - build MVP-lite first with Streamlit, FastAPI, DuckDB, Qdrant, NetworkX, Docling, and local artifacts;
 - keep PostgreSQL, Neo4j, React, queues, and object storage as P1 adapters;
+- treat DuckDB as the P0 system of record and Qdrant as retrieval only;
+- require every final answer sentence to cite exact `EvidenceSpan` IDs;
+- use `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md` as the scaffold contract;
 - do not scaffold application code until the owner approves the P0 build plan.
