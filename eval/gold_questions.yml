@@ -1,0 +1,14 @@
+questions:
+  - question_id: q_ideal_nicu_hardness
+    question: "Что делали по Ni-30Cu при старении 700 C 8 ч и как изменилась твердость?"
+    expected_material_ids: ["mat_nicu_30"]
+    expected_regime_ids: ["reg_aging_700c_8h_air"]
+    expected_property_ids: ["prop_vickers_hardness"]
+    expected_effect_direction: increase
+    expected_answer_contains: ["245 HV", "35 HV", "старение"]
+  - question_id: q_gap_nicu_conductivity
+    question: "Есть ли электропроводность для Ni-30Cu после старения 700 C 8 ч?"
+    expected_gaps: ["missing_measurement"]
+  - question_id: q_conflict_method
+    question: "Есть ли противоречия по твердости Ni-Cu после старения?"
+    expected_conflicts: ["method_mismatch"]

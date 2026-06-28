@@ -1,0 +1,141 @@
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+SecurityLabel = Literal["public", "internal", "confidential", "restricted"]
+ValidationStatus = Literal[
+    "raw",
+    "extracted",
+    "normalized",
+    "validated_rule",
+    "validated_manual",
+    "rejected",
+    "conflict",
+    "needs_review",
+]
+SpanType = Literal["text", "table_row", "table_cell", "figure", "page_image"]
+EffectDirection = Literal["increase", "decrease", "no_change", "mixed", "unknown"]
+
+
+class EvidenceSpan(BaseModel):
+    span_id: str
+    source_id: str
+    artifact_id: str
+    span_type: SpanType
+    visible_text: str
+    page: int | None = None
+    locator: dict[str, object] = Field(default_factory=dict)
+    extraction_run_id: str | None = None
+    validation_status: ValidationStatus = "raw"
+    evidence_confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    security_label: SecurityLabel = "internal"
+
+
+class Material(BaseModel):
+    material_id: str
+    canonical_name: str
+    aliases: list[str] = Field(default_factory=list)
+    alloy_family: str = "unknown"
+    composition: list[dict[str, object]] = Field(default_factory=list)
+
+
+class ProcessStep(BaseModel):
+    step_index: int
+    operation: str
+    temperature_c: float | None = None
+    duration_h: float | None = None
+    atmosphere: str | None = None
+    cooling: str | None = None
+    deformation_percent: float | None = None
+
+
+class ProcessingRegime(BaseModel):
+    regime_id: str
+    regime_type: str
+    summary: str
+    steps: list[ProcessStep] = Field(default_factory=list)
+
+
+class PropertyMeasurement(BaseModel):
+    measurement_id: str
+    experiment_id: str
+    property_id: str
+    property_name: str
+    value: float | None = None
+    unit: str | None = None
+    original_value: str | None = None
+    method: str | None = None
+    supporting_span_ids: list[str]
+    validation_status: ValidationStatus = "validated_rule"
+
+
+class EffectClaim(BaseModel):
+    effect_id: str
+    experiment_id: str
+    material_id: str
+    regime_id: str
+    property_id: str
+    direction: EffectDirection
+    supporting_span_ids: list[str]
+    baseline_measurement_id: str | None = None
+    treated_measurement_id: str | None = None
+    delta_value: float | None = None
+    delta_unit: str | None = None
+    qualitative_only: bool = False
+    qualitative_summary: str
+
+
+class ExperimentRow(BaseModel):
+    experiment_id: str
+    material_id: str
+    material_name: str
+    regime_id: str
+    regime_summary: str
+    property_id: str
+    property_name: str
+    measurement: dict[str, object]
+    evidence_ids: list[str]
+    validation_status: ValidationStatus
+
+
+class GraphPath(BaseModel):
+    path_id: str
+    nodes: list[str]
+    relationships: list[str]
+
+
+class AnswerSentence(BaseModel):
+    sentence: str
+    supporting_span_ids: list[str]
+    supporting_fact_ids: list[str] = Field(default_factory=list)
+    graph_path_ids: list[str] = Field(default_factory=list)
+
+
+class AnswerVerification(BaseModel):
+    citation_coverage: float
+    unsupported_claim_count: int
+    source_label_leak_count: int
+    prompt_injection_success_count: int = 0
+
+
+class AskRequest(BaseModel):
+    question: str
+    language: Literal["ru", "en"] = "ru"
+    include_graph: bool = True
+    include_gaps: bool = True
+    filters: dict[str, object] = Field(default_factory=dict)
+
+
+class AskResponse(BaseModel):
+    run_id: str
+    answer_summary: list[AnswerSentence]
+    confidence: Literal["low", "medium", "high"]
+    experiments: list[ExperimentRow]
+    evidence: list[EvidenceSpan]
+    graph_paths: list[GraphPath]
+    verification: AnswerVerification
+    conflicts: list[dict[str, object]] = Field(default_factory=list)
+    gaps: list[dict[str, object]] = Field(default_factory=list)
+    follow_up_queries: list[str] = Field(default_factory=list)
