@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 1b0c3f4 fix: align upload limits with proxy validation
+Last commit: 0bd652e fix: enforce exact material matches in QA
 Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml
 Area: CORE
 -->
@@ -61,6 +61,9 @@ The workbench now exposes filter controls for `source_ids`, `material`, `propert
 `/qa/ask` honors typed request filters when selecting experiments, including `source_ids`,
 `source_id`, `material`/`material_name`, `property`/`property_name`, `regime`/`regime_id`,
 and `experiment_id`. Unknown filter keys are rejected at request validation.
+Free-text material tokens with explicit composition numbers are now strict: if a query such as
+`Ni-20` does not match a known material token, QA returns no experiments/evidence and exposes
+nearby material follow-up queries instead of falling back to unrelated Ni-Cu rows.
 
 ## Invariants
 

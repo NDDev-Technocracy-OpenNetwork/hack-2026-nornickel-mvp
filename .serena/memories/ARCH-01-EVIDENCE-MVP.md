@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 1b0c3f4 fix: align upload limits with proxy validation
+Last commit: 0bd652e fix: enforce exact material matches in QA
 Scope: apps/web/; services/api/; src/nornikel_kg/; docker-compose.yml; .github/workflows/ci.yml; .serena/newproj/nornikel-kg-search/
 Area: ARCH
 -->
@@ -42,6 +42,8 @@ Current implemented port: `EvidenceLedgerPort`. It covers source listing, eviden
 source upload, source deletion, and evidence packet loading.
 Workbench now renders user-configured filter controls that serialize typed `AskFilters` into
 `/qa/ask`.
+Workbench also renders clickable `follow_up_queries` when QA returns no exact material match,
+allowing the user to rerun a corrected query without accepting unrelated evidence.
 
 Planned ports remain: `DocumentParserPort`, `ArtifactStorePort`, `MetadataStorePort`, `VectorIndexPort`, `GraphStorePort`, `EmbeddingModelPort`, `SparseEncoderPort`, `LLMExtractorPort`, `SecurityLabelPolicyPort`, and `EvaluationStorePort`.
 

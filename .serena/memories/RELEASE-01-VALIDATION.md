@@ -78,4 +78,5 @@ dependencies, update `uv.lock` and run backend tests.
 - Server smoke: `curl -fsS https://fa.nddev.asia/api/health` and public
   `POST https://fa.nddev.asia/api/qa/ask` prove the deployed reverse proxy and API route.
 - Browser validation: local ignored screenshots under `browser/` prove the workbench desktop query,
-  CSV upload, source counts, evidence cards, graph path, and mobile layout.
+  CSV upload, source counts, evidence cards, graph path, mobile layout, and strict material
+  no-result/follow-up behavior.

@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 1b0c3f4 fix: align upload limits with proxy validation
+Last commit: 0bd652e fix: enforce exact material matches in QA
 Scope: Makefile; tests/; scripts/run_eval.py; eval/; .github/workflows/ci.yml
 Area: TEST
 -->
@@ -41,6 +41,10 @@ and preservation of seeded source facts when an overlapping CSV is uploaded.
 Additional coverage added for `/qa/ask` filter parsing:
 - scalar filter values are accepted (auto-coerced to single-element lists);
 - unknown filter keys are rejected with 422 validation errors.
+Additional coverage protects free-text material precision:
+- unknown explicit material token `Ni-20` returns no experiments/evidence/gaps and suggests known
+  nearby materials;
+- exact `Ni-30Cu` queries remain scoped to `Ni-30Cu` and do not mix in `CuNi30`.
 API contracts around source lifecycle now include:
 - `DELETE /sources/{source_id}` idempotent when source missing (404 expected).
 - invalid upload extension returns 400.
@@ -66,4 +70,4 @@ When new ingestion/retrieval behavior is added, extend `eval/gold_questions.yml`
 - `docker compose config`: Compose validation.
 - Secret scan: `rg` command used in task excludes lockfiles/runtime dirs and checks for non-placeholder secrets.
 - Browser validation: Playwright CLI desktop/mobile snapshots and screenshots under ignored `browser/`;
-  latest local proof paths use the `browser/ledger-fixed-*` prefix.
+  latest local proof paths for strict material matching use the `browser/strict-material-*` prefix.

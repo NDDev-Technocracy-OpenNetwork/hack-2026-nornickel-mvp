@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 1b0c3f4 fix: align upload limits with proxy validation
+Last commit: 0bd652e fix: enforce exact material matches in QA
 Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; docs/deployment/fa-nddev.md; tests/
 Area: TECHDEBT
 -->
@@ -38,6 +38,9 @@ to filtered result sets.
 Scalar filter values are coerced to one-element lists to preserve API ergonomics.
 The workbench now provides interactive QA filter controls (sources/material/property/regime/
 experiment), which removes manual JSON request editing.
+Free-text material queries with explicit composition numbers now use strict matching; unknown
+tokens produce no evidence and clickable close-material suggestions instead of generic family
+fallback results.
 Source lifecycle was hardened with:
 - upload extension validation (`.csv`, `.md`, `.markdown`, `.txt`, `.text` only),
 - filename, MIME, empty-file, and size validation at `/sources/upload`,
