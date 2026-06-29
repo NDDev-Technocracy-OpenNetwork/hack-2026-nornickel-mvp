@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import re
+from difflib import SequenceMatcher
+
 from nornikel_kg.domain.answer_claims import ClaimVerifier
 from nornikel_kg.domain.evidence import EvidenceSpanFactory
 from nornikel_kg.domain.ids import claim_id, fact_id, source_id_from_bytes, stable_hash
@@ -17,6 +20,9 @@ from nornikel_kg.domain.models import (
 )
 from nornikel_kg.domain.security import SourceLabelPolicy
 from nornikel_kg.ports.ledger import EvidenceLedgerPort
+
+MATERIAL_ELEMENTS = frozenset({"ni", "cu", "cr", "mo", "al", "fe", "co", "mn", "ti"})
+MATERIAL_TOKEN_RE = re.compile(r"\b[a-z]{1,8}\d{1,3}[a-z0-9]*\b", re.IGNORECASE)
 
 
 class DemoQAService:
@@ -39,6 +45,10 @@ class DemoQAService:
         packet = self._load_packet()
         allowed_evidence = self.source_label_policy.filter_spans(packet.evidence)
         allowed_span_ids = {span.span_id for span in allowed_evidence}
+        unmatched_material_tokens = self._unmatched_material_tokens(
+            question=request.question,
+            experiments=packet.experiments,
+        )
         selected_experiments = self._select_experiments(
             question=request.question,
             experiments=packet.experiments,
@@ -68,6 +78,12 @@ class DemoQAService:
             question=request.question,
             packet_gaps=packet.gaps,
             selected_experiments=selected_experiments,
+            unmatched_material_tokens=unmatched_material_tokens,
+        )
+        follow_up_queries = self._follow_up_queries(
+            question=request.question,
+            experiments=packet.experiments,
+            unmatched_material_tokens=unmatched_material_tokens,
         )
         return AskResponse(
             run_id=f"qa_run_{stable_hash([request.question, request.language], 12)}",
@@ -79,10 +95,7 @@ class DemoQAService:
             verification=verification,
             conflicts=conflicts,
             gaps=gaps if request.include_gaps else [],
-            follow_up_queries=[
-                "Показать режимы старения Ni-Cu с измеренной электропроводностью",
-                "Сравнить Ni-30Cu и CuNi30 по твердости после отжига",
-            ],
+            follow_up_queries=follow_up_queries,
         )
 
     def _load_packet(self) -> EvidenceLedgerPacket:
@@ -231,10 +244,13 @@ class DemoQAService:
         normalized_question = self._normalize(question)
         requested_property = self._requested_property(question)
         has_request_filters = self._has_filter_constraints(request_filters)
+        if self._unmatched_material_tokens(question=question, experiments=experiments):
+            return []
         exact_materials = {
-            self._normalize(experiment.material_name)
+            self._normalize_material_token(experiment.material_name)
             for experiment in experiments
-            if self._normalize(experiment.material_name) in normalized_question
+            if self._normalize_material_token(experiment.material_name)
+            and self._normalize_material_token(experiment.material_name) in normalized_question
         }
         filtered_experiments: list[ExperimentRow] = []
         scored: list[tuple[int, ExperimentRow]] = []
@@ -242,7 +258,11 @@ class DemoQAService:
             if not self._matches_filters(experiment, request_filters):
                 continue
             filtered_experiments.append(experiment)
-            if exact_materials and self._normalize(experiment.material_name) not in exact_materials:
+            if (
+                exact_materials
+                and self._normalize_material_token(experiment.material_name)
+                not in exact_materials
+            ):
                 continue
             if requested_property and not self._property_matches(requested_property, experiment):
                 continue
@@ -347,7 +367,7 @@ class DemoQAService:
     def _score_experiment(self, question: str, experiment: ExperimentRow) -> int:
         normalized_question = self._normalize(question)
         score = 0
-        material = self._normalize(experiment.material_name)
+        material = self._normalize_material_token(experiment.material_name)
         if material and material in normalized_question:
             score += 6
         elif self._mentions_nicu_family(normalized_question) and self._is_nicu_family(experiment):
@@ -480,14 +500,90 @@ class DemoQAService:
         question: str,
         packet_gaps: list[dict[str, object]],
         selected_experiments: list[ExperimentRow],
+        unmatched_material_tokens: set[str],
     ) -> list[dict[str, object]]:
+        if unmatched_material_tokens:
+            return []
         requested_property = self._requested_property(question)
         if not selected_experiments or requested_property == "conductivity":
             return packet_gaps
         return []
 
+    def _follow_up_queries(
+        self,
+        *,
+        question: str,
+        experiments: list[ExperimentRow],
+        unmatched_material_tokens: set[str],
+    ) -> list[str]:
+        if unmatched_material_tokens:
+            return [
+                f"Что было с {material_name}?"
+                for material_name in self._closest_material_names(
+                    requested_tokens=unmatched_material_tokens,
+                    experiments=experiments,
+                )
+            ]
+        return [
+            "Показать режимы старения Ni-Cu с измеренной электропроводностью",
+            "Сравнить Ni-30Cu и CuNi30 по твердости после отжига",
+        ]
+
     def _normalize(self, value: str) -> str:
         return value.lower().replace("ё", "е").replace("-", "")
+
+    def _normalize_material_token(self, value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", value.lower().replace("ё", "е"))
+
+    def _requested_material_tokens(self, question: str) -> set[str]:
+        compact_question = re.sub(r"[-_/]+", "", question.lower())
+        tokens = {
+            self._normalize_material_token(match.group(0))
+            for match in MATERIAL_TOKEN_RE.finditer(compact_question)
+        }
+        return {
+            token
+            for token in tokens
+            if any(element in token for element in MATERIAL_ELEMENTS)
+        }
+
+    def _known_material_tokens(self, experiments: list[ExperimentRow]) -> set[str]:
+        return {
+            self._normalize_material_token(experiment.material_name)
+            for experiment in experiments
+            if self._normalize_material_token(experiment.material_name)
+        }
+
+    def _unmatched_material_tokens(
+        self,
+        *,
+        question: str,
+        experiments: list[ExperimentRow],
+    ) -> set[str]:
+        requested_tokens = self._requested_material_tokens(question)
+        if not requested_tokens:
+            return set()
+        known_tokens = self._known_material_tokens(experiments)
+        return requested_tokens.difference(known_tokens)
+
+    def _closest_material_names(
+        self,
+        *,
+        requested_tokens: set[str],
+        experiments: list[ExperimentRow],
+    ) -> list[str]:
+        material_names = sorted({experiment.material_name for experiment in experiments})
+        scored: list[tuple[float, str]] = []
+        for material_name in material_names:
+            material_token = self._normalize_material_token(material_name)
+            best_score = max(
+                SequenceMatcher(None, requested_token, material_token).ratio()
+                for requested_token in requested_tokens
+            )
+            if best_score >= 0.45:
+                scored.append((best_score, material_name))
+        scored.sort(key=lambda item: (-item[0], item[1]))
+        return [material_name for _, material_name in scored[:3]]
 
     def _format_value(self, value: object, unit: object) -> str:
         value_text = f"{value:g}" if isinstance(value, int | float) else str(value)
@@ -499,5 +595,5 @@ class DemoQAService:
         )
 
     def _is_nicu_family(self, experiment: ExperimentRow) -> bool:
-        material = self._normalize(experiment.material_name)
+        material = self._normalize_material_token(experiment.material_name)
         return "ni" in material and "cu" in material

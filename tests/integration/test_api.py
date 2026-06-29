@@ -66,6 +66,52 @@ def test_qa_endpoint_returns_gap_without_hallucinating(
     assert payload["verification"]["unsupported_claim_count"] == 0
 
 
+def test_qa_endpoint_does_not_return_nearby_material_for_unknown_explicit_material(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+    response = client.post(
+        "/qa/ask",
+        json={
+            "question": "что было с Ni-20",
+            "language": "ru",
+            "include_graph": True,
+            "include_gaps": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["answer_summary"] == []
+    assert payload["experiments"] == []
+    assert payload["evidence"] == []
+    assert payload["gaps"] == []
+    assert payload["confidence"] == "low"
+    assert "Что было с Ni-30Cu?" in payload["follow_up_queries"]
+
+
+def test_qa_endpoint_keeps_exact_material_query_scoped_to_that_material(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+    response = client.post(
+        "/qa/ask",
+        json={
+            "question": "что было с Ni-30Cu",
+            "language": "ru",
+            "include_graph": True,
+            "include_gaps": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["experiments"]
+    assert {experiment["material_name"] for experiment in payload["experiments"]} == {"Ni-30Cu"}
+
+
 def test_sources_upload_and_evidence_listing(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,

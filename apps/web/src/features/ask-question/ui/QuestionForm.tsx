@@ -1,16 +1,18 @@
 import { Search } from "lucide-react";
-import { useState } from "react";
-
-import { defaultQuestion } from "@/shared/i18n/ru";
 
 type QuestionFormProps = {
   disabled?: boolean;
+  question: string;
+  onQuestionChange: (question: string) => void;
   onSubmit: (question: string) => void;
 };
 
-export function QuestionForm({ disabled, onSubmit }: QuestionFormProps) {
-  const [question, setQuestion] = useState(defaultQuestion);
-
+export function QuestionForm({
+  disabled,
+  question,
+  onQuestionChange,
+  onSubmit,
+}: QuestionFormProps) {
   return (
     <form
       className="question-form"
@@ -22,7 +24,7 @@ export function QuestionForm({ disabled, onSubmit }: QuestionFormProps) {
       <textarea
         aria-label="Вопрос по материалу, режиму и свойству"
         value={question}
-        onChange={(event) => setQuestion(event.target.value)}
+        onChange={(event) => onQuestionChange(event.target.value)}
       />
       <div className="button-row">
         <button className="primary-button" disabled={disabled} type="submit">

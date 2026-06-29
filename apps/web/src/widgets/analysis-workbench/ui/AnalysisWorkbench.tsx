@@ -11,6 +11,7 @@ import {
   type AskResponse,
   type SourceSummary,
 } from "@/shared/api";
+import { defaultQuestion } from "@/shared/i18n/ru";
 import { Panel } from "@/shared/ui";
 import { ArtifactBankPanel, EvidenceList } from "@/widgets/artifact-bank";
 import { EvaluationDashboard } from "@/widgets/evaluation-dashboard";
@@ -19,6 +20,7 @@ import { GraphView } from "@/widgets/graph-view";
 export function AnalysisWorkbench() {
   const [answer, setAnswer] = useState<AskResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [question, setQuestion] = useState(defaultQuestion);
   const [artifactError, setArtifactError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sources, setSources] = useState<SourceSummary[]>([]);
@@ -98,11 +100,12 @@ export function AnalysisWorkbench() {
     return filters;
   }
 
-  async function handleSubmit(question: string) {
+  async function handleSubmit(nextQuestion: string) {
     setLoading(true);
     setError(null);
     try {
-      setAnswer(await askQuestion(question, buildFilters()));
+      setQuestion(nextQuestion);
+      setAnswer(await askQuestion(nextQuestion, buildFilters()));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось выполнить запрос");
     } finally {
@@ -247,7 +250,12 @@ export function AnalysisWorkbench() {
               </button>
             </div>
           </div>
-          <QuestionForm disabled={loading} onSubmit={handleSubmit} />
+          <QuestionForm
+            disabled={loading}
+            onQuestionChange={setQuestion}
+            onSubmit={handleSubmit}
+            question={question}
+          />
         </Panel>
 
         <Panel title="Сводка по доказательствам">
@@ -265,11 +273,36 @@ export function AnalysisWorkbench() {
           ) : null}
           {answer ? (
             <div className="answer-list">
-              {answer.answer_summary.map((sentence) => (
-                <div className="answer-sentence" key={sentence.sentence}>
-                  {sentence.sentence}
+              {answer.answer_summary.length > 0 ? (
+                answer.answer_summary.map((sentence) => (
+                  <div className="answer-sentence" key={sentence.sentence}>
+                    {sentence.sentence}
+                  </div>
+                ))
+              ) : (
+                <div className="answer-sentence answer-sentence-muted">
+                  {answer.gaps.length > 0
+                    ? "В выбранном корпусе нет измерения для запрошенного свойства."
+                    : "Точного совпадения по введенному материалу и условиям не найдено."}
                 </div>
-              ))}
+              )}
+              {answer.follow_up_queries.length > 0 ? (
+                <div className="follow-up-list">
+                  {answer.follow_up_queries.map((followUpQuery) => (
+                    <button
+                      className="secondary-button"
+                      disabled={loading}
+                      key={followUpQuery}
+                      onClick={() => {
+                        void handleSubmit(followUpQuery);
+                      }}
+                      type="button"
+                    >
+                      {followUpQuery}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="status-pill">
@@ -279,7 +312,7 @@ export function AnalysisWorkbench() {
           )}
         </Panel>
 
-        {answer ? (
+        {answer && answer.experiments.length > 0 ? (
           <Panel title="Таблица экспериментов">
             <table className="experiment-table">
               <thead>
@@ -320,8 +353,8 @@ export function AnalysisWorkbench() {
         />
         {answer ? (
           <>
-            <EvidenceList evidence={answer.evidence} />
-            <GraphView graphPaths={answer.graph_paths} />
+            {answer.evidence.length > 0 ? <EvidenceList evidence={answer.evidence} /> : null}
+            {answer.graph_paths.length > 0 ? <GraphView graphPaths={answer.graph_paths} /> : null}
             <EvaluationDashboard answer={answer} />
           </>
         ) : (
