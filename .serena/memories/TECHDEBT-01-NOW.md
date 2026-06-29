@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: a3bf103 feat: expose QA filters in frontend workbench
+Last commit: 1b0c3f4 fix: align upload limits with proxy validation
 Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; docs/deployment/fa-nddev.md; tests/
 Area: TECHDEBT
 -->
@@ -40,6 +40,9 @@ The workbench now provides interactive QA filter controls (sources/material/prop
 experiment), which removes manual JSON request editing.
 Source lifecycle was hardened with:
 - upload extension validation (`.csv`, `.md`, `.markdown`, `.txt`, `.text` only),
+- filename, MIME, empty-file, and size validation at `/sources/upload`,
+- `MAX_SOURCE_UPLOAD_BYTES` defaulting to 5242880 bytes,
+- web Nginx `client_max_body_size 6m` aligned above the FastAPI upload limit,
 - transactional upload/seed paths in DuckDB repository,
 - 404-aware source lookup and delete endpoints to avoid silent partial states.
 

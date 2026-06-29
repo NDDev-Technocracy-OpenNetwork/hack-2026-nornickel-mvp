@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: a3bf103 feat: expose QA filters in frontend workbench
+Last commit: 1b0c3f4 fix: align upload limits with proxy validation
 Scope: apps/web/; services/api/; src/nornikel_kg/; docker-compose.yml; .github/workflows/ci.yml; .serena/newproj/nornikel-kg-search/
 Area: ARCH
 -->
@@ -32,6 +32,8 @@ Capture the P0 architecture contract for the evidence-first materials research w
 
 P0 scaffold uses React 19/Vite 8/TypeScript for the workbench, FastAPI for the API, Python 3.12 for backend/scientific code, and DuckDB as the current evidence ledger. Runtime seeds the synthetic fixture and can ingest CSV/Markdown sources through `/sources/upload`; source lifecycle now also supports
 `DELETE /sources/{source_id}` and safe evidence listing at `/sources/{source_id}/evidence`.
+Upload hardening is split across FastAPI validation and the web Nginx proxy limit so production
+uploads receive structured API errors instead of proxy-level body-size failures.
 Qdrant is present in Compose and dependency configuration but is not yet used by the QA runtime. NetworkX, Docling/OCR, and LiteLLM/OpenAI-compatible LLM/embedding calls are P1 adapter wiring paths. Neo4j, PostgreSQL, queues, and object storage remain deferred migrations.
 
 ## Contracts And Data

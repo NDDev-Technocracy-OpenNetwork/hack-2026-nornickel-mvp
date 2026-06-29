@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: f06fb3a feat: harden source lifecycle with validated upload and delete
+Last commit: 1b0c3f4 fix: align upload limits with proxy validation
 Scope: Makefile; tests/; scripts/run_eval.py; eval/; .github/workflows/ci.yml
 Area: TEST
 -->
@@ -44,6 +44,9 @@ Additional coverage added for `/qa/ask` filter parsing:
 API contracts around source lifecycle now include:
 - `DELETE /sources/{source_id}` idempotent when source missing (404 expected).
 - invalid upload extension returns 400.
+- invalid upload filename path separators and overlong filenames return 400.
+- empty uploads, unsupported MIME types, oversized files, and Markdown without extractable evidence
+  return deterministic 400/413 API errors.
 - `/sources/{source_id}/evidence` returns 404 for missing source.
 
 ## Invariants

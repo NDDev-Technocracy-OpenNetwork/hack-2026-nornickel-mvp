@@ -1,7 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-06-28
 Last updated: 2026-06-29
-Last commit: f747194 chore(docs): add project instruction docs
+Last commit: 1b0c3f4 fix: align upload limits with proxy validation
 Scope: README.md; .serena/newproj/nornikel-kg-search/
 Area: DOCS
 -->
@@ -40,6 +40,9 @@ The planning package now favors a server-first product MVP: React/Vite frontend,
 ## Contracts And Data
 
 Repository artifacts are written in English. User-facing conversation remains Russian unless the owner requests otherwise.
+Current instruction docs also record the `/sources/upload` runtime limit contract:
+`MAX_SOURCE_UPLOAD_BYTES` defaults to 5242880 bytes, and bundled web Nginx uses
+`client_max_body_size 6m`.
 
 ## Invariants
 

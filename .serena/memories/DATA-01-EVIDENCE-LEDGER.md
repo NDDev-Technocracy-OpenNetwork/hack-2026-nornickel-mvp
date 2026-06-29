@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: a3bf103 feat: expose QA filters in frontend workbench
+Last commit: 1b0c3f4 fix: align upload limits with proxy validation
 Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/; src/nornikel_kg/services/qa_service.py; src/nornikel_kg/services/runtime.py; sample_docs/synthetic/; eval/
 Area: DATA
 -->
@@ -52,6 +52,10 @@ CSV uploads must include `experiment_id`, `material`, `regime`, `temperature_c`,
 Uploaded rows become `table_row` evidence spans plus source-scoped measurements/effects. Markdown
 or text uploads are stored as evidence spans without deriving measurements in P0.
 Upload accepts `.csv`, `.md`, `.markdown`, `.txt`, `.text`; other extensions are rejected.
+The API also rejects blank filenames, path separators, control characters, overlong filenames,
+unsupported MIME types, empty files, and payloads larger than `MAX_SOURCE_UPLOAD_BYTES`
+(default 5242880 bytes). Bundled web Nginx sets `client_max_body_size 6m` so multipart overhead
+is not rejected before FastAPI can return the structured upload error.
 
 `DemoQAService` now applies `AskRequest.filters` before ranking experiments; filtered
 queries can constrain by `source_ids`, `material`/`material_name`, `property`/`property_name`,

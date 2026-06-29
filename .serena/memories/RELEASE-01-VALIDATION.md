@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: f06fb3a feat: harden source lifecycle with validated upload and delete
+Last commit: 1b0c3f4 fix: align upload limits with proxy validation
 Scope: Makefile; .github/workflows/ci.yml; docker-compose.yml; docs/deployment/fa-nddev.md; apps/web/; services/api/
 Area: RELEASE
 -->
@@ -47,6 +47,9 @@ to the host.
 The web container serves the Vite build through Nginx and proxies `/api/` to the FastAPI
 container. `VITE_API_BASE_URL` defaults to `/api` for container deployment and can be set to
 `http://127.0.0.1:8000` during local dev.
+The bundled web Nginx config sets `client_max_body_size 6m` so uploads can reach FastAPI's
+`MAX_SOURCE_UPLOAD_BYTES` validation path; host-level reverse proxies must keep an equal or
+larger body limit.
 
 The API container sets `PROJECT_ROOT=/app`; `src/nornikel_kg/services/runtime.py` uses that
 root to resolve `data/` and `sample_docs/` after the package is installed into site-packages.

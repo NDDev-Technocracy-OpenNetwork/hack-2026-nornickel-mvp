@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: a3bf103 feat: expose QA filters in frontend workbench
+Last commit: 1b0c3f4 fix: align upload limits with proxy validation
 Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml
 Area: CORE
 -->
@@ -51,7 +51,9 @@ ledger -> deterministic evidence packet -> answer claim verification -> experime
 evidence cards, graph path, conflict, gap, and evaluation/security metrics. Source upload flow is:
 React artifact bank -> FastAPI `/sources/upload` -> DuckDB source/evidence/fact writes ->
 `/sources` and `/sources/{source_id}/evidence` listing. Source lifecycle now also supports
-hard delete via `DELETE /sources/{source_id}` and validates upload extension at API entry.
+hard delete via `DELETE /sources/{source_id}` and validates upload filename, extension, MIME type,
+empty body, and size at API entry. Bundled web Nginx sets `client_max_body_size 6m`, while
+FastAPI enforces `MAX_SOURCE_UPLOAD_BYTES` (default 5242880 bytes).
 Qdrant, Docling/OCR, NetworkX, and LiteLLM are prepared as modular next adapters,
 not yet wired into the scaffold runtime.
 The workbench now exposes filter controls for `source_ids`, `material`, `property`, `regime`,
