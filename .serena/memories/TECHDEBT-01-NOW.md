@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 0bd652e fix: enforce exact material matches in QA
+Last commit: ad88521 test: expand exact material query regression coverage
 Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; docs/deployment/fa-nddev.md; tests/
 Area: TECHDEBT
 -->
@@ -39,8 +39,9 @@ Scalar filter values are coerced to one-element lists to preserve API ergonomics
 The workbench now provides interactive QA filter controls (sources/material/property/regime/
 experiment), which removes manual JSON request editing.
 Free-text material queries with explicit composition numbers now use strict matching; unknown
-tokens produce no evidence and clickable close-material suggestions instead of generic family
-fallback results.
+tokens including `Ni-20`, `ni 20`, and `Ni–20` produce no evidence and clickable close-material
+suggestions instead of generic family fallback results. Known spaced forms such as `Ni 30 Cu`
+and `Cu Ni 30` are normalized to exact ledger materials.
 Source lifecycle was hardened with:
 - upload extension validation (`.csv`, `.md`, `.markdown`, `.txt`, `.text` only),
 - filename, MIME, empty-file, and size validation at `/sources/upload`,

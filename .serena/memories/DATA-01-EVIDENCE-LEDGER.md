@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 0bd652e fix: enforce exact material matches in QA
+Last commit: ad88521 test: expand exact material query regression coverage
 Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/; src/nornikel_kg/services/qa_service.py; src/nornikel_kg/services/runtime.py; sample_docs/synthetic/; eval/
 Area: DATA
 -->
@@ -69,9 +69,10 @@ while unknown filter keys are rejected by request validation.
 
 Frontend now includes a dedicated workbench filter surface and sends `AskFilters`
 for source/material/property/regime/experiment scope at request time.
-Free-text QA also extracts explicit material-like tokens containing element symbols and numbers.
-Known tokens such as `Ni-30Cu` stay scoped to that material; unknown tokens such as `Ni-20`
-return an empty grounded result plus close material suggestions through `follow_up_queries`.
+Free-text QA extracts explicit material-like tokens containing element symbols and composition
+numbers. Known tokens such as `Ni-30Cu`, `Ni 30 Cu`, and `Cu Ni 30` stay scoped to that material;
+unknown tokens such as `Ni-20`, `ni 20`, and `Ni–20` return an empty grounded result plus close
+material suggestions through `follow_up_queries`.
 
 ## Contracts And Data
 

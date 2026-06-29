@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 1b0c3f4 fix: align upload limits with proxy validation
+Last commit: ad88521 test: expand exact material query regression coverage
 Scope: Makefile; .github/workflows/ci.yml; docker-compose.yml; docs/deployment/fa-nddev.md; apps/web/; services/api/
 Area: RELEASE
 -->
@@ -33,6 +33,9 @@ Capture the current validation and rollout contract for the server-first MVP sca
 CI has separate backend and frontend jobs. Backend runs `uv sync --group dev`,
 `uv run ruff check .`, `uv run mypy`, `uv run pytest`, and `uv run python scripts/run_eval.py`.
 Frontend runs `npm ci --no-audit`, `npm run typecheck`, and `npm run build`.
+`scripts/run_eval.py` currently runs 9 fixture QA cases, including strict unknown material
+no-result checks for `ni-20`, `ni 20`, and `Ni–20`, exact scoped material checks for spaced
+known alloys, and the broad `Ni-Cu 700 C 8 ч` family query.
 
 Docker Compose defines `api`, `web`, and `qdrant`. The `.env` file is optional in Compose;
 runtime secrets are expected to live outside git.
@@ -73,7 +76,8 @@ dependencies, update `uv.lock` and run backend tests.
 ## Verification
 
 - `make ci`: proves Python lint/type/tests and TypeScript/build.
-- `make eval`: proves fixture answer verification metrics.
+- `make eval`: proves fixture answer verification metrics and exact material anti-regression
+  cases.
 - `docker compose config`: proves Compose syntax.
 - Server smoke: `curl -fsS https://fa.nddev.asia/api/health` and public
   `POST https://fa.nddev.asia/api/qa/ask` prove the deployed reverse proxy and API route.

@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-06-29
-Last commit: 0bd652e fix: enforce exact material matches in QA
+Last commit: ad88521 test: expand exact material query regression coverage
 Scope: Makefile; tests/; scripts/run_eval.py; eval/; .github/workflows/ci.yml
 Area: TEST
 -->
@@ -42,9 +42,11 @@ Additional coverage added for `/qa/ask` filter parsing:
 - scalar filter values are accepted (auto-coerced to single-element lists);
 - unknown filter keys are rejected with 422 validation errors.
 Additional coverage protects free-text material precision:
-- unknown explicit material token `Ni-20` returns no experiments/evidence/gaps and suggests known
-  nearby materials;
-- exact `Ni-30Cu` queries remain scoped to `Ni-30Cu` and do not mix in `CuNi30`.
+- unknown explicit material tokens `Ni-20`, `ni 20`, and `Ni–20` return no
+  experiments/evidence/gaps and suggest known nearby materials;
+- exact `Ni-30Cu`, `Ni 30 Cu`, and `Cu Ni 30` queries remain scoped to their exact ledger
+  materials and do not mix neighboring Ni-Cu rows;
+- family query `Ni-Cu 700 C 8 ч` remains broad and does not treat `700 C` as a fake material token.
 API contracts around source lifecycle now include:
 - `DELETE /sources/{source_id}` idempotent when source missing (404 expected).
 - invalid upload extension returns 400.
@@ -66,7 +68,8 @@ When new ingestion/retrieval behavior is added, extend `eval/gold_questions.yml`
 ## Verification
 
 - `make ci`: ruff, mypy, pytest, frontend typecheck, frontend build.
-- `make eval`: fixture QA metrics.
+- `make eval`: 9-case fixture QA metrics, including screenshot-style `ni-20` no-result,
+  spaced/unicode material variants, exact scoped known materials, and family temperature query.
 - `docker compose config`: Compose validation.
 - Secret scan: `rg` command used in task excludes lockfiles/runtime dirs and checks for non-placeholder secrets.
 - Browser validation: Playwright CLI desktop/mobile snapshots and screenshots under ignored `browser/`;
