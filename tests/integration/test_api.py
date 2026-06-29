@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 
@@ -66,15 +67,25 @@ def test_qa_endpoint_returns_gap_without_hallucinating(
     assert payload["verification"]["unsupported_claim_count"] == 0
 
 
+@pytest.mark.parametrize(
+    "question",
+    [
+        "что было с Ni-20",
+        "что со сплавами? с ni-20",
+        "что со сплавами? с ni 20",
+        "что со сплавами? с Ni–20",
+    ],
+)
 def test_qa_endpoint_does_not_return_nearby_material_for_unknown_explicit_material(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
+    question: str,
 ) -> None:
     client = client_with_tmp_ledger(tmp_path, monkeypatch)
     response = client.post(
         "/qa/ask",
         json={
-            "question": "что было с Ni-20",
+            "question": question,
             "language": "ru",
             "include_graph": True,
             "include_gaps": True,
@@ -89,17 +100,29 @@ def test_qa_endpoint_does_not_return_nearby_material_for_unknown_explicit_materi
     assert payload["gaps"] == []
     assert payload["confidence"] == "low"
     assert "Что было с Ni-30Cu?" in payload["follow_up_queries"]
+    assert "Что было с CuNi30?" in payload["follow_up_queries"]
 
 
+@pytest.mark.parametrize(
+    ("question", "expected_material"),
+    [
+        ("что было с Ni-30Cu", "Ni-30Cu"),
+        ("что со сплавами? с ni-30cu", "Ni-30Cu"),
+        ("что со сплавами? с Ni 30 Cu", "Ni-30Cu"),
+        ("что со сплавами? с Cu Ni 30", "CuNi30"),
+    ],
+)
 def test_qa_endpoint_keeps_exact_material_query_scoped_to_that_material(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
+    question: str,
+    expected_material: str,
 ) -> None:
     client = client_with_tmp_ledger(tmp_path, monkeypatch)
     response = client.post(
         "/qa/ask",
         json={
-            "question": "что было с Ni-30Cu",
+            "question": question,
             "language": "ru",
             "include_graph": True,
             "include_gaps": True,
@@ -109,7 +132,32 @@ def test_qa_endpoint_keeps_exact_material_query_scoped_to_that_material(
     assert response.status_code == 200
     payload = response.json()
     assert payload["experiments"]
-    assert {experiment["material_name"] for experiment in payload["experiments"]} == {"Ni-30Cu"}
+    assert {experiment["material_name"] for experiment in payload["experiments"]} == {
+        expected_material
+    }
+
+
+def test_qa_endpoint_keeps_family_query_broad_without_treating_temperature_as_material(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+    response = client.post(
+        "/qa/ask",
+        json={
+            "question": "что со сплавами Ni-Cu 700 C 8 ч",
+            "language": "ru",
+            "include_graph": True,
+            "include_gaps": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert {experiment["material_name"] for experiment in payload["experiments"]} == {
+        "CuNi30",
+        "Ni-30Cu",
+    }
 
 
 def test_sources_upload_and_evidence_listing(

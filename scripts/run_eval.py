@@ -14,6 +14,7 @@ EVAL_QUESTIONS = [
         "question": "Что делали по Ni-30Cu при старении 700 C 8 ч и как изменилась твердость?",
         "min_experiment_count": 1,
         "min_evidence_count": 1,
+        "expected_material_names": ["Ni-30Cu"],
         "expected_gap": False,
     },
     {
@@ -28,6 +29,68 @@ EVAL_QUESTIONS = [
         "question": "Есть ли противоречия по твердости Ni-Cu после старения?",
         "min_experiment_count": 1,
         "min_evidence_count": 1,
+        "expected_gap": False,
+    },
+    {
+        "question_id": "q_unknown_material_nicu20_screenshot",
+        "question": "что со сплавами? с ni-20",
+        "min_experiment_count": 0,
+        "max_experiment_count": 0,
+        "min_evidence_count": 0,
+        "max_evidence_count": 0,
+        "expected_gap": False,
+        "forbidden_material_names": ["CuNi30", "Ni-30Cu"],
+        "expected_follow_up_contains": ["Что было с CuNi30?", "Что было с Ni-30Cu?"],
+    },
+    {
+        "question_id": "q_unknown_material_nicu20_space",
+        "question": "что со сплавами? с ni 20",
+        "min_experiment_count": 0,
+        "max_experiment_count": 0,
+        "min_evidence_count": 0,
+        "max_evidence_count": 0,
+        "expected_gap": False,
+        "forbidden_material_names": ["CuNi30", "Ni-30Cu"],
+        "expected_follow_up_contains": ["Что было с CuNi30?", "Что было с Ni-30Cu?"],
+    },
+    {
+        "question_id": "q_unknown_material_nicu20_unicode_dash",
+        "question": "что со сплавами? с Ni–20",
+        "min_experiment_count": 0,
+        "max_experiment_count": 0,
+        "min_evidence_count": 0,
+        "max_evidence_count": 0,
+        "expected_gap": False,
+        "forbidden_material_names": ["CuNi30", "Ni-30Cu"],
+        "expected_follow_up_contains": ["Что было с CuNi30?", "Что было с Ni-30Cu?"],
+    },
+    {
+        "question_id": "q_exact_spaced_nicu30",
+        "question": "что со сплавами? с Ni 30 Cu",
+        "min_experiment_count": 1,
+        "max_experiment_count": 1,
+        "min_evidence_count": 1,
+        "expected_material_names": ["Ni-30Cu"],
+        "forbidden_material_names": ["CuNi30"],
+        "expected_gap": False,
+    },
+    {
+        "question_id": "q_exact_spaced_cuni30",
+        "question": "что со сплавами? с Cu Ni 30",
+        "min_experiment_count": 1,
+        "max_experiment_count": 1,
+        "min_evidence_count": 1,
+        "expected_material_names": ["CuNi30"],
+        "forbidden_material_names": ["Ni-30Cu"],
+        "expected_gap": False,
+    },
+    {
+        "question_id": "q_family_nicu_temperature_not_material",
+        "question": "что со сплавами Ni-Cu 700 C 8 ч",
+        "min_experiment_count": 2,
+        "max_experiment_count": 2,
+        "min_evidence_count": 2,
+        "expected_material_names": ["CuNi30", "Ni-30Cu"],
         "expected_gap": False,
     },
 ]
@@ -54,18 +117,54 @@ def main() -> None:
                 "experiment_count": len(response.experiments),
                 "evidence_count": len(response.evidence),
                 "gap_count": len(response.gaps),
+                "material_names": [experiment.material_name for experiment in response.experiments],
+                "follow_up_queries": response.follow_up_queries,
             }
             cases.append(case)
+            material_names = {experiment.material_name for experiment in response.experiments}
             if response.verification.unsupported_claim_count != 0:
                 failed_cases.append(f"{question['question_id']}: unsupported claims")
             if response.verification.source_label_leak_count != 0:
                 failed_cases.append(f"{question['question_id']}: source-label leak")
             if len(response.experiments) < int(question["min_experiment_count"]):
                 failed_cases.append(f"{question['question_id']}: missing experiments")
+            if (
+                "max_experiment_count" in question
+                and len(response.experiments) > int(question["max_experiment_count"])
+            ):
+                failed_cases.append(f"{question['question_id']}: too many experiments")
             if len(response.evidence) < int(question["min_evidence_count"]):
                 failed_cases.append(f"{question['question_id']}: missing evidence")
-            if bool(question["expected_gap"]) and not response.gaps:
-                failed_cases.append(f"{question['question_id']}: missing expected gap")
+            if (
+                "max_evidence_count" in question
+                and len(response.evidence) > int(question["max_evidence_count"])
+            ):
+                failed_cases.append(f"{question['question_id']}: too much evidence")
+            if "expected_material_names" in question:
+                expected = {str(item) for item in question["expected_material_names"]}
+                if material_names != expected:
+                    failed_cases.append(
+                        f"{question['question_id']}: expected materials {sorted(expected)}, "
+                        f"got {sorted(material_names)}"
+                    )
+            if "forbidden_material_names" in question:
+                forbidden = {str(item) for item in question["forbidden_material_names"]}
+                leaked_materials = material_names.intersection(forbidden)
+                if leaked_materials:
+                    failed_cases.append(
+                        f"{question['question_id']}: leaked forbidden materials "
+                        f"{sorted(leaked_materials)}"
+                    )
+            if "expected_gap" in question and bool(response.gaps) != bool(question["expected_gap"]):
+                failed_cases.append(f"{question['question_id']}: unexpected gap state")
+            expected_follow_ups = {
+                str(item) for item in question.get("expected_follow_up_contains", [])
+            }
+            missing_follow_ups = expected_follow_ups.difference(response.follow_up_queries)
+            if missing_follow_ups:
+                failed_cases.append(
+                    f"{question['question_id']}: missing follow-ups {sorted(missing_follow_ups)}"
+                )
 
         result = {
             "status": "ok" if not failed_cases else "failed",

@@ -23,6 +23,15 @@ from nornikel_kg.ports.ledger import EvidenceLedgerPort
 
 MATERIAL_ELEMENTS = frozenset({"ni", "cu", "cr", "mo", "al", "fe", "co", "mn", "ti"})
 MATERIAL_TOKEN_RE = re.compile(r"\b[a-z]{1,8}\d{1,3}[a-z0-9]*\b", re.IGNORECASE)
+MATERIAL_ELEMENT_PATTERN = r"(?:ni|cu|cr|mo|al|fe|co|mn|ti)"
+MATERIAL_SEPARATOR_PATTERN = r"[\s\-_/–—]*"
+MATERIAL_SPACED_TOKEN_RE = re.compile(
+    rf"\b{MATERIAL_ELEMENT_PATTERN}"
+    rf"(?:{MATERIAL_SEPARATOR_PATTERN}{MATERIAL_ELEMENT_PATTERN})*"
+    rf"{MATERIAL_SEPARATOR_PATTERN}\d{{1,3}}"
+    rf"(?:{MATERIAL_SEPARATOR_PATTERN}{MATERIAL_ELEMENT_PATTERN})*\b",
+    re.IGNORECASE,
+)
 
 
 class DemoQAService:
@@ -246,12 +255,15 @@ class DemoQAService:
         has_request_filters = self._has_filter_constraints(request_filters)
         if self._unmatched_material_tokens(question=question, experiments=experiments):
             return []
+        requested_material_tokens = self._requested_material_tokens(question)
+        known_material_tokens = self._known_material_tokens(experiments)
         exact_materials = {
             self._normalize_material_token(experiment.material_name)
             for experiment in experiments
             if self._normalize_material_token(experiment.material_name)
             and self._normalize_material_token(experiment.material_name) in normalized_question
         }
+        exact_materials.update(requested_material_tokens.intersection(known_material_tokens))
         filtered_experiments: list[ExperimentRow] = []
         scored: list[tuple[int, ExperimentRow]] = []
         for experiment in experiments:
@@ -541,11 +553,20 @@ class DemoQAService:
             self._normalize_material_token(match.group(0))
             for match in MATERIAL_TOKEN_RE.finditer(compact_question)
         }
+        tokens.update(
+            self._normalize_material_token(match.group(0))
+            for match in MATERIAL_SPACED_TOKEN_RE.finditer(question.lower())
+            if self._is_plausible_spaced_material_token(match.group(0))
+        )
         return {
             token
             for token in tokens
             if any(element in token for element in MATERIAL_ELEMENTS)
         }
+
+    def _is_plausible_spaced_material_token(self, token: str) -> bool:
+        numbers = [int(value) for value in re.findall(r"\d{1,3}", token)]
+        return bool(numbers) and all(value <= 100 for value in numbers)
 
     def _known_material_tokens(self, experiments: list[ExperimentRow]) -> set[str]:
         return {
