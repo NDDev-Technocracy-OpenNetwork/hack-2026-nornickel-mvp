@@ -29,6 +29,8 @@ Owner workflow: rldyour plugins/skills.
 
 - Upload hardening contract: `POST /sources/upload` accepts `.csv`, `.md`, `.markdown`, `.txt`, `.text` with MIME checks
   and `MAX_SOURCE_UPLOAD_BYTES` (default `5242880`) size limit.
+- The bundled web Nginx proxy sets `client_max_body_size 6m`; host-level Nginx for `fa.nddev.asia`
+  must keep an equal or larger body limit.
 - Error details from API failures are surfaced to the UI through shared API client (`apps/web/src/shared/api/client.ts`).
 
 ## Known TODOs / P1

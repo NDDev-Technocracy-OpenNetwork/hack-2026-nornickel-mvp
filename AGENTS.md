@@ -83,6 +83,8 @@ python3 /Users/rldyourmnd/.codex/plugins/cache/rldyour-codex/rldyour-serena-mcp/
 Runtime defaults:
 
 - Upload hardening limit is `MAX_SOURCE_UPLOAD_BYTES` (default `5_242_880` bytes), configurable via `.env`.
+- The bundled web Nginx proxy sets `client_max_body_size 6m`; host-level reverse proxies must
+  keep an equal or larger body limit for `/api/sources/upload`.
 
 Run repository-local validation scripts when present.
 

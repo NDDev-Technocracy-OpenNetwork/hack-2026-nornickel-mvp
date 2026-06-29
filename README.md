@@ -66,6 +66,8 @@ Upload hardening:
 - CSV upload requires UTF-8 text with the required headers and at least one data row.
 - Markdown/Text uploads must contain at least one non-empty non-heading line to create evidence spans.
 - Maximum upload size is configured by `MAX_SOURCE_UPLOAD_BYTES` (default: `5242880`).
+- The bundled web Nginx proxy sets `client_max_body_size 6m` so multipart upload overhead
+  does not get rejected before the FastAPI limit check.
 
 Run all local quality gates:
 

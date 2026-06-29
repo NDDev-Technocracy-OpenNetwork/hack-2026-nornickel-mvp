@@ -131,6 +131,37 @@ def test_sources_upload_rejects_empty_file(tmp_path: Path, monkeypatch: MonkeyPa
     assert response.json()["detail"] == "Uploaded file is empty."
 
 
+def test_sources_upload_rejects_filename_with_path_separator(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/sources/upload",
+        files={"file": ("../bad.csv", b"id,x\n1,2", "text/csv")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded filename must not contain path separators."
+
+
+def test_sources_upload_rejects_too_long_filename(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+    filename = f"{'a' * 161}.csv"
+
+    response = client.post(
+        "/sources/upload",
+        files={"file": (filename, b"id,x\n1,2", "text/csv")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded filename is too long. Maximum length is 160."
+
+
 def test_sources_upload_rejects_oversized_file(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("MAX_SOURCE_UPLOAD_BYTES", "16")
     client = client_with_tmp_ledger(tmp_path, monkeypatch)

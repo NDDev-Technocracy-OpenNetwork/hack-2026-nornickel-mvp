@@ -12,6 +12,8 @@ from nornikel_kg.services.runtime import get_ledger_repository
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
+_MAX_UPLOAD_FILENAME_LENGTH = 160
+
 
 def _max_upload_bytes() -> int:
     raw_value = os.getenv("MAX_SOURCE_UPLOAD_BYTES", "5242880")
@@ -20,6 +22,39 @@ def _max_upload_bytes() -> int:
     except ValueError:
         return 5 * 1024 * 1024
     return max(1, value)
+
+
+def _validated_upload_filename(filename: str | None) -> str:
+    if filename is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file must have a filename.",
+        )
+    normalized = filename.strip()
+    if not normalized:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file must have a filename.",
+        )
+    if len(normalized) > _MAX_UPLOAD_FILENAME_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Uploaded filename is too long. "
+                f"Maximum length is {_MAX_UPLOAD_FILENAME_LENGTH}."
+            ),
+        )
+    if "/" in normalized or "\\" in normalized:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded filename must not contain path separators.",
+        )
+    if any(ord(char) < 32 or ord(char) == 127 for char in normalized):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded filename contains unsupported control characters.",
+        )
+    return normalized
 
 
 @router.get("")
@@ -68,7 +103,7 @@ _ALLOWED_MIME_TYPES = {
 
 @router.post("/upload")
 async def upload_source(file: Annotated[UploadFile, File(...)]) -> SourceIngestResponse:
-    filename = file.filename or "uploaded-source"
+    filename = _validated_upload_filename(file.filename)
     extension = Path(filename).suffix.lower()
     max_upload_bytes = _max_upload_bytes()
 

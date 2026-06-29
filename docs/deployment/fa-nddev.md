@@ -26,6 +26,9 @@ Current Compose services:
 - `web`: Nginx serving the React build and proxying `/api/` to FastAPI.
 - `api`: FastAPI application.
 - `qdrant`: vector database placeholder for the retrieval adapter.
+- `POST /api/sources/upload` is limited by FastAPI `MAX_SOURCE_UPLOAD_BYTES` and by
+  Nginx `client_max_body_size`. The bundled web Nginx config sets `client_max_body_size 6m`
+  for the default 5 MiB source limit plus multipart overhead.
 
 For the shared `fa.nddev.asia` server, use a server-only Compose override stored on
 the host as `/home/ubuntu/nornikel-kg-search/docker-compose.server.yml`:
@@ -38,7 +41,8 @@ the host as `/home/ubuntu/nornikel-kg-search/docker-compose.server.yml`:
 TLS is terminated by the host-level Nginx virtual host
 `/etc/nginx/conf.d/fa-nddev-asia.conf`. The vhost uses the existing Let's Encrypt
 certificate at `/etc/letsencrypt/live/fa.nddev.asia/` and proxies all HTTPS traffic
-to `http://127.0.0.1:8513`.
+to `http://127.0.0.1:8513`. Keep its `client_max_body_size` at least as large as the
+container Nginx value, otherwise uploads can be rejected before they reach FastAPI.
 
 Before rollout, verify:
 
