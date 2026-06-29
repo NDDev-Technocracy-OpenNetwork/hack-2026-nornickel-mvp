@@ -7,6 +7,57 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
+type ErrorPayload = {
+  detail?: unknown;
+};
+
+function formatServerErrorDetail(detail: unknown): string {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === "string") {
+          return item;
+        }
+        if (typeof item === "object" && item !== null) {
+          if (
+            "loc" in item &&
+            typeof item.msg === "string" &&
+            Array.isArray(item.loc)
+          ) {
+            const location = item.loc.join(".");
+            return `${location}: ${item.msg}`;
+          }
+          if ("msg" in item && typeof item.msg === "string") {
+            return item.msg as string;
+          }
+        }
+        return JSON.stringify(item);
+      })
+      .filter((item) => item.length > 0)
+      .join(" | ");
+  }
+  if (typeof detail === "object" && detail !== null) {
+    return JSON.stringify(detail);
+  }
+  return "Unknown error";
+}
+
+async function readErrorMessage(response: Response, context: string): Promise<string> {
+  try {
+    const payload = (await response.json()) as ErrorPayload;
+    if (payload && "detail" in payload) {
+      const message = formatServerErrorDetail(payload.detail);
+      return `${context}: ${message}`;
+    }
+  } catch {
+    // keep fallback below
+  }
+  return `${context}: ${response.status}`;
+}
+
 function hasNonEmptyFilters(filters: AskFilters | undefined): filters is AskFilters {
   if (!filters) {
     return false;
@@ -42,7 +93,7 @@ export async function askQuestion(question: string, filters?: AskFilters): Promi
   });
 
   if (!response.ok) {
-    throw new Error(`QA request failed with ${response.status}`);
+    throw new Error(await readErrorMessage(response, "QA request failed"));
   }
 
   return (await response.json()) as AskResponse;
@@ -52,7 +103,7 @@ export async function listSources(): Promise<SourceSummary[]> {
   const response = await fetch(`${API_BASE_URL}/sources`);
 
   if (!response.ok) {
-    throw new Error(`Sources request failed with ${response.status}`);
+    throw new Error(await readErrorMessage(response, "Sources request failed"));
   }
 
   const payload = (await response.json()) as { sources: SourceSummary[] };
@@ -69,7 +120,7 @@ export async function uploadSource(file: File): Promise<SourceIngestResponse> {
   });
 
   if (!response.ok) {
-    throw new Error(`Source upload failed with ${response.status}`);
+    throw new Error(await readErrorMessage(response, "Source upload failed"));
   }
 
   return (await response.json()) as SourceIngestResponse;
@@ -81,7 +132,7 @@ export async function deleteSource(sourceId: string): Promise<{ source_id: strin
   });
 
   if (!response.ok) {
-    throw new Error(`Source delete failed with ${response.status}`);
+    throw new Error(await readErrorMessage(response, "Source delete failed"));
   }
 
   return (await response.json()) as { source_id: string; deleted: boolean };

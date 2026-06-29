@@ -116,6 +116,69 @@ def test_sources_upload_rejects_invalid_csv(tmp_path: Path, monkeypatch: MonkeyP
     )
 
     assert response.status_code == 400
+    assert "field 'temperature_c' must be a numeric value" in response.json()["detail"]
+
+
+def test_sources_upload_rejects_empty_file(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/sources/upload",
+        files={"file": ("empty.csv", b"", "text/csv")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded file is empty."
+
+
+def test_sources_upload_rejects_oversized_file(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("MAX_SOURCE_UPLOAD_BYTES", "16")
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+    too_big = (
+        b"experiment_id,material,regime,temperature_c,duration_h,atmosphere,property,method,"
+        b"baseline_value,treated_value,unit,effect\n" + b"x" * 20
+    )
+
+    response = client.post(
+        "/sources/upload",
+        files={"file": ("big.csv", too_big, "text/csv")},
+    )
+
+    assert response.status_code == 413
+    assert (
+        response.json()["detail"]
+        == "Uploaded file is too large. Maximum allowed size is 16 bytes."
+    )
+
+
+def test_sources_upload_rejects_unsupported_mime_for_csv_extension(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/sources/upload",
+        files={"file": ("report.csv", b"id,x\n1,2", "application/pdf")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"].startswith("Unsupported MIME type")
+
+
+def test_sources_upload_rejects_markdown_without_extractable_evidence(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    client = client_with_tmp_ledger(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/sources/upload",
+        files={"file": ("notes.md", "# Header\n\n", "text/markdown")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Markdown source has no extractable evidence."
 
 
 def test_sources_delete_endpoint_removes_source(

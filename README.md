@@ -60,6 +60,13 @@ Open:
 http://127.0.0.1:5173/
 ```
 
+Upload hardening:
+
+- `POST /sources/upload` accepts `.csv`, `.md`, `.markdown`, `.txt`, `.text`.
+- CSV upload requires UTF-8 text with the required headers and at least one data row.
+- Markdown/Text uploads must contain at least one non-empty non-heading line to create evidence spans.
+- Maximum upload size is configured by `MAX_SOURCE_UPLOAD_BYTES` (default: `5242880`).
+
 Run all local quality gates:
 
 ```bash

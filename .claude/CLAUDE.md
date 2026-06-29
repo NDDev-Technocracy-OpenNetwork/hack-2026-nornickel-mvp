@@ -27,6 +27,10 @@ Owner workflow: rldyour plugins/skills.
 - Public deployment target and container path: `fa.nddev.asia`, compose services `api`, `web`, and `qdrant`.
 - Do not leave local runtime artifacts (temp DBs, browser artifacts, runtime markers).
 
+- Upload hardening contract: `POST /sources/upload` accepts `.csv`, `.md`, `.markdown`, `.txt`, `.text` with MIME checks
+  and `MAX_SOURCE_UPLOAD_BYTES` (default `5242880`) size limit.
+- Error details from API failures are surfaced to the UI through shared API client (`apps/web/src/shared/api/client.ts`).
+
 ## Known TODOs / P1
 - Connect Qdrant retrieval path to runtime query stage.
 - Add Docling/OCR ingestion path for PDF/DOCX/PPTX/XLSX/image.

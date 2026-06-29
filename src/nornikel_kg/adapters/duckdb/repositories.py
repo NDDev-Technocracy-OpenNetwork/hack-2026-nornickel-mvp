@@ -145,7 +145,7 @@ class DuckDBLedgerRepository:
                         first_row_ordinal=1,
                     )
                 else:
-                    self._insert_markdown_evidence(
+                    evidence_count = self._insert_markdown_evidence(
                         connection,
                         source_id=source_id,
                         text=content.decode("utf-8", errors="replace"),
@@ -153,6 +153,8 @@ class DuckDBLedgerRepository:
                         parser_profile="markdown_text_v1",
                         selected_lines=(),
                     )
+                    if evidence_count == 0:
+                        raise SourceIngestError("Markdown source has no extractable evidence.")
                 connection.execute("COMMIT")
             except (SourceIngestError, ValueError):
                 connection.execute("ROLLBACK")
@@ -619,7 +621,7 @@ class DuckDBLedgerRepository:
         artifact_locator: str,
         parser_profile: str,
         selected_lines: tuple[str, ...],
-    ) -> None:
+    ) -> int:
         lines = [
             line.strip()
             for line in text.splitlines()
@@ -652,6 +654,8 @@ class DuckDBLedgerRepository:
                 security_label="internal",
             )
             self._insert_evidence_span(connection, span)
+
+        return len(lines)
 
     def _delete_fact_records(
         self,

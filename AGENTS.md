@@ -80,6 +80,10 @@ python3 /Users/rldyourmnd/.codex/plugins/cache/rldyour-codex/rldyour-flow/local/
 python3 /Users/rldyourmnd/.codex/plugins/cache/rldyour-codex/rldyour-serena-mcp/local/scripts/serena_memory_state.py
 ```
 
+Runtime defaults:
+
+- Upload hardening limit is `MAX_SOURCE_UPLOAD_BYTES` (default `5_242_880` bytes), configurable via `.env`.
+
 Run repository-local validation scripts when present.
 
 ## Key Notes

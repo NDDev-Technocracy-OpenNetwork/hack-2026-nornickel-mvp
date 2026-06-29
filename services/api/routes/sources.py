@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -10,6 +11,15 @@ from nornikel_kg.domain.models import EvidenceSpan, SourceIngestResponse, Source
 from nornikel_kg.services.runtime import get_ledger_repository
 
 router = APIRouter(prefix="/sources", tags=["sources"])
+
+
+def _max_upload_bytes() -> int:
+    raw_value = os.getenv("MAX_SOURCE_UPLOAD_BYTES", "5242880")
+    try:
+        value = int(raw_value)
+    except ValueError:
+        return 5 * 1024 * 1024
+    return max(1, value)
 
 
 @router.get("")
@@ -34,18 +44,66 @@ def delete_source(source_id: str) -> dict[str, object]:
 
 
 _ALLOWED_UPLOAD_EXTENSIONS = {".csv", ".md", ".markdown", ".txt", ".text"}
+_ALLOWED_MIME_TYPES = {
+    ".csv": {
+        "text/csv",
+        "text/plain",
+        "application/csv",
+        "application/vnd.ms-excel",
+    },
+    ".md": {
+        "text/markdown",
+        "text/x-markdown",
+        "text/plain",
+    },
+    ".markdown": {
+        "text/markdown",
+        "text/x-markdown",
+        "text/plain",
+    },
+    ".txt": {"text/plain"},
+    ".text": {"text/plain"},
+}
 
 
 @router.post("/upload")
 async def upload_source(file: Annotated[UploadFile, File(...)]) -> SourceIngestResponse:
     filename = file.filename or "uploaded-source"
     extension = Path(filename).suffix.lower()
+    max_upload_bytes = _max_upload_bytes()
+
     if extension not in _ALLOWED_UPLOAD_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported upload type. Allowed: .csv, .md, .markdown, .txt",
+            detail="Unsupported upload type. Allowed: .csv, .md, .markdown, .txt, .text",
         )
-    content = await file.read()
+    if file.size is not None and file.size > max_upload_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Uploaded file is too large. Maximum allowed size is {max_upload_bytes} bytes.",
+        )
+    content_type = (file.content_type or "").lower()
+    allowed_mime_types = _ALLOWED_MIME_TYPES.get(extension, set())
+    if content_type and content_type not in allowed_mime_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Unsupported MIME type '{content_type}'. "
+                "Allowed: text/csv, text/plain, text/markdown, text/x-markdown."
+            ),
+        )
+
+    content = await file.read(max_upload_bytes + 1)
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty.",
+        )
+    if len(content) > max_upload_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Uploaded file is too large. Maximum allowed size is {max_upload_bytes} bytes.",
+        )
     try:
         return get_ledger_repository().ingest_source_bytes(
             filename=filename,
