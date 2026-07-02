@@ -130,3 +130,22 @@ def test_litellm_imported_only_inside_llm_adapter() -> None:
         if "import litellm" in text or "from litellm" in text:
             offenders.append(path.as_posix())
     assert offenders == []
+
+
+def test_strictify_adds_additional_properties() -> None:
+    from nornikel_kg.adapters.llm.gateway import _strictify
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": {"type": "object", "properties": {"x": {"type": "string"}}},
+            }
+        },
+    }
+    strict = _strictify(schema)
+    assert strict["additionalProperties"] is False
+    assert strict["properties"]["items"]["items"]["additionalProperties"] is False
+    # original untouched
+    assert "additionalProperties" not in schema
