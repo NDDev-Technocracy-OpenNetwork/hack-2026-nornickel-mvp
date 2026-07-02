@@ -9,6 +9,15 @@ Owner workflow: rldyour plugins/skills.
 - Sources: `src/nornikel_kg/`; API routes: `services/api/routes/`; frontend: `apps/web/`.
 - `make ci`, `make eval` and browser/ deploy smoke are used for validation.
 - Memory/invariant source-of-truth is `.serena/memories/`.
+- MVP upgrade plan (2026-07-02, entry point `.serena/plans/00_PLAN_INDEX.md`): waves W0-W5
+  in `.serena/plans/`, self-critique and source-backed facts in `.serena/reviews/`.
+  Plans amend `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md`.
+
+## LLM Constraints (hackathon rules)
+- OpenAI/Anthropic APIs are forbidden; only open-weight models usable from Russia.
+- Provider: dataeyes.ai key through the LiteLLM SDK; configure only catalog models with
+  verified open weights. Optional Ollama fallback. Observability: self-hosted Langfuse.
+- CI never needs LLM secrets or network: all LLM paths must keep deterministic fakes.
 
 ## Durable Commands
 - Backend checks: `uv run ruff check .`, `uv run mypy`, `uv run pytest`.
@@ -34,6 +43,8 @@ Owner workflow: rldyour plugins/skills.
 - Error details from API failures are surfaced to the UI through shared API client (`apps/web/src/shared/api/client.ts`).
 
 ## Known TODOs / P1
-- Connect Qdrant retrieval path to runtime query stage.
-- Add Docling/OCR ingestion path for PDF/DOCX/PPTX/XLSX/image.
-- Add LiteLLM extraction / answer synthesis stage.
+- Planned in `.serena/plans/03_IMPLEMENTATION_PLAN.md` (W1-W3): Docling PDF/DOCX ingest
+  (text layer only, no OCR), LiteLLM extraction + answer synthesis, Qdrant hybrid retrieval,
+  own graph layer (entities/relations in DuckDB + NetworkX), gaps/conflicts, graph UI.
+- Deployment moves to a new server before the deadline (~2026-07-16); `fa.nddev.asia`
+  is the interim stand. See `.serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md`.

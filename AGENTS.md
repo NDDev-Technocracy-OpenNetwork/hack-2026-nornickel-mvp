@@ -91,4 +91,10 @@ Run repository-local validation scripts when present.
 ## Key Notes
 
 - MVP now is a fully grounded evidence-led flow with DuckDB ingestion and deterministic QA on synthetic source.
-- P1 remaining gaps: Qdrant retrieval hybridization, Docling/OCR parser pipeline, LiteLLM answer synthesis.
+- P1 remaining gaps: Qdrant retrieval hybridization, Docling parser pipeline, LiteLLM extraction/answer synthesis.
+- Implementation plan package (2026-07-02): `.serena/plans/00_PLAN_INDEX.md` (waves W0-W5)
+  plus `.serena/reviews/` (critical review, research evidence register). Plans amend
+  `18_IMPLEMENTATION_SPEC.md`; scope/decision precedence is `.serena/plans/01_MVP_SCOPE_AND_DECISIONS.md`.
+- Hackathon LLM constraint: OpenAI/Anthropic APIs forbidden; only open-weight models
+  (provider dataeyes.ai via LiteLLM SDK, optional Ollama fallback); Langfuse self-host
+  for observability; CI stays offline with deterministic LLM fakes.
