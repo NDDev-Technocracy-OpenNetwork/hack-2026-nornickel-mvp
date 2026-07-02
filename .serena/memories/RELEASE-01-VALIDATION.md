@@ -1,7 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: f4bf404 Merge pull request #11 from rldyourmnd/feat/w5-corpus-eval-hardening
-Scope: Makefile; .github/workflows/ci.yml; docker-compose.yml; docs/deployment/nornikel-nddev.md; pyproject.toml; services/api/Dockerfile; apps/web/nginx.conf; .env.example; apps/web/; services/api/
+Last commit: ece33d3 docs(plans): record completed dataeyes discovery and configured dev model
+Scope: Makefile; .github/workflows/ci.yml; docker-compose.yml; docs/deployment/nornikel-nddev.md; pyproject.toml; services/api/Dockerfile; apps/web/nginx.conf; .env.example; apps/web/; services/api/; .serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md
 Area: RELEASE
 -->
 
@@ -36,7 +36,7 @@ Capture the current validation and rollout contract after waves W0-W5.
 
 CI has separate backend and frontend jobs; backend runs `uv sync --group dev`,
 `uv run ruff check .`, `uv run mypy`, `uv run pytest`, and `uv run python scripts/run_eval.py`.
-At `f4bf404`, `uv run pytest` passes **89 tests, 3 skipped** and ruff/mypy report no issues. The
+At `ece33d3`, `uv run pytest` passes **90 tests, 3 skipped** and ruff/mypy report no issues. The
 backend CI job still does not pass `--extra ingest`, so `docling`, `fastembed`, `gliner`,
 `sentence-transformers`, and `trafilatura` are not installed in CI; the 3 skipped tests are the
 `importorskip`-guarded Docling/trafilatura cases in
@@ -92,11 +92,24 @@ reverse proxy limit/timeout.
 
 ## Verification
 
-- `make ci`: proves Python lint/type/tests and TypeScript/build (89 backend tests pass, 3
-  skipped, at `f4bf404`).
+- `make ci`: proves Python lint/type/tests and TypeScript/build (90 backend tests pass, 3
+  skipped, at `ece33d3`).
 - `make eval`: proves the 12-question live fixture answer/safety metrics.
 - `docker compose config`: proves Compose syntax.
 - Server smoke (per `docs/deployment/nornikel-nddev.md`): the live stand at
   `https://nornikel.nddev.asia` runs the full stack; Docling PDF/DOCX ingest verified live;
-  Qdrant reindexed; eval runs stored; `LLM_ENABLED=false` until a working `dataeyes.ai` key is
-  available (see `mem:TECHDEBT-01-NOW`).
+  Qdrant reindexed; eval runs stored.
+- LLM mode: `.serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md` "Discovery Results (2026-07-03,
+  working key — COMPLETE)" records a working `dataeyes.ai` key against
+  `https://platform.dataeyes.ai/v1` (180-model catalog) and an owner decision to configure
+  `LLM_ENABLED=true` on the stand since 2026-07-03 with `openai/gpt-5.4-mini` for extraction and
+  answers (dev-only; not committed to `.env.example`, which still defaults `LLM_ENABLED=false`
+  with blank `LLM_EXTRACTION_MODEL`/`LLM_ANSWER_MODEL`). Browser validation
+  (gitignored artifacts under `browser/llm-answer-*.png`, `browser/mobile-answer.png`) confirms
+  the workbench renders an LLM-composed answer summary citing `span_id`s, the force-graph with
+  its entity-type legend, the gaps matrix, and a decisions timeline (2 events, both without a
+  parsed date — see `mem:TECHDEBT-01-NOW`); `browser/llm-answer-zone.png` also shows the
+  `v2_scan_no_text_layer.pdf` source tagged `карантин` (quarantine) in the artifact bank. The
+  proprietary dev model (`openai/gpt-5.4-mini`) must be swapped for a verified open-weight
+  catalog model (`deepseek-v3.2-251201` per the same discovery) before the submission freeze —
+  see `mem:TECHDEBT-01-NOW`.

@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: f4bf404 Merge pull request #11 from rldyourmnd/feat/w5-corpus-eval-hardening
+Last commit: ece33d3 docs(plans): record completed dataeyes discovery and configured dev model
 Scope: Makefile; tests/; scripts/run_eval.py; eval/; .github/workflows/ci.yml; pyproject.toml
 Area: TEST
 -->
@@ -29,7 +29,7 @@ Capture required verification and acceptance gates after waves W0-W5.
 
 ## Current Behavior
 
-`uv run pytest` passes **89 tests, 3 skipped** at `f4bf404`; `uv run ruff check .` and
+`uv run pytest` passes **90 tests, 3 skipped** at `ece33d3`; `uv run ruff check .` and
 `uv run mypy` report no issues. The 3 skips are `pytest.importorskip("docling")` /
 `pytest.importorskip("trafilatura")` guards in
 `tests/integration/test_synthetic_v2_corpus.py` (`test_docx_corpus_ingests_with_docling`,
@@ -74,7 +74,10 @@ ingestion, conflict, and alias assertions against the v2 corpus), and the doclin
 gated tests described above.
 
 `tests/unit/test_llm_gateway.py` still covers `build_llm()`/`FakeLLM`/`LiteLLMGateway` behavior
-and the repo-wide `litellm`-import guard, unchanged from W0.
+and the repo-wide `litellm`-import guard, unchanged from W0, plus
+`test_strictify_adds_additional_properties` (added at `e3bb1ee`/PR#13), which asserts
+`_strictify()` sets `additionalProperties: false` on a nested object-in-array schema without
+mutating the caller's original dict.
 
 ## Invariants
 
@@ -92,7 +95,7 @@ change.
 
 ## Verification
 
-- `make ci`: ruff, mypy, pytest (89 passed, 3 skipped at `f4bf404`), frontend typecheck, build.
+- `make ci`: ruff, mypy, pytest (90 passed, 3 skipped at `ece33d3`), frontend typecheck, build.
 - `make eval`: `scripts/run_eval.py` — 12-question live QA metrics against the DuckDB ledger.
 - `docker compose config`: Compose validation.
 - Secret scan: repository-wide `rg` pattern scan excludes lockfiles/runtime dirs.

@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: f4bf404 Merge pull request #11 from rldyourmnd/feat/w5-corpus-eval-hardening
+Last commit: ece33d3 docs(plans): record completed dataeyes discovery and configured dev model
 Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/; src/nornikel_kg/resources/dictionaries/; src/nornikel_kg/services/; sample_docs/; eval/
 Area: DATA
 -->
@@ -52,7 +52,13 @@ retrieval-unit indexing, and answer-run/eval persistence in the DuckDB ledger.
   `SourceSummary.status`, falling back to `"ledger"` when no run row exists.
 - `DuckDBLedgerRepository.get_source` / `delete_source`: unchanged from P0.
 - `DuckDBLedgerRepository.migrate`: applies every `migrations/*.sql` file, backfills legacy
-  columns, and seeds the graph dictionaries via `load_dictionaries(connection)`.
+  columns, and seeds the graph dictionaries via `load_dictionaries(connection)`; runs at most
+  once per repository instance (`self._migrated` guard) instead of once per call.
+- `DuckDBLedgerRepository._connect()`: a `@contextmanager` used by every read/write method
+  instead of a bare `duckdb.connect(...)`; it serializes all access behind a class-level
+  `threading.RLock` (`_db_lock`) because concurrent request threads sharing one repository
+  instance used to race on writes (`TransactionContext Error: Conflict on update!`). Fixed in
+  `src/nornikel_kg/adapters/duckdb/repositories.py` (merge PR#12, `31f2459`).
 - `DuckDBLedgerRepository.load_demo_packet`: returns the full evidence/graph packet used by
   `DemoQAService`; returns an **empty** `EvidenceLedgerPacket` when the ledger has no sources
   or evidence — it does not raise `LookupError` (verified: no such raise exists in
@@ -148,6 +154,8 @@ entities never appear in the coverage matrix.
   against DuckDB and re-filtered by `security_label` before being trusted
   (`RetrievalService.retrieve_span_ids`).
 - Do not overwrite conflicting measurements or average them silently.
+- Do not call `duckdb.connect(...)` directly from repository methods; always go through
+  `DuckDBLedgerRepository._connect()` so concurrent request threads stay serialized.
 - Numeric measurements require property, value, unit, and supporting spans.
 - LLM-extracted facts without existing EvidenceSpan IDs are rejected; invalid LLM extraction
   payloads are recorded with `status="rejected"` in `extraction_claims` and fall back to
@@ -165,7 +173,7 @@ Add migrations and domain tests before adding parser/indexing code that writes n
 
 ## Verification
 
-- `make ci`: runs ruff, mypy, pytest (89 passed, 3 skipped at `f4bf404`), frontend typecheck/build.
+- `make ci`: runs ruff, mypy, pytest (90 passed, 3 skipped at `ece33d3`), frontend typecheck/build.
 - `make eval`: `scripts/run_eval.py` — 12 hardcoded questions verifying citation coverage,
   material alias resolution (`МН30` -> `CuNi30`), provenance, comparison, gap, and conflict
   behavior against the live DuckDB ledger.

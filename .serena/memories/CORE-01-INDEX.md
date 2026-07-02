@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: f4bf404 Merge pull request #11 from rldyourmnd/feat/w5-corpus-eval-hardening
+Last commit: ece33d3 docs(plans): record completed dataeyes discovery and configured dev model
 Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml; .env.example; pyproject.toml; .serena/plans/; .serena/reviews/; docs/deployment/
 Area: CORE
 -->
@@ -69,9 +69,13 @@ gaps that were open at W0. The system now:
   1 image-only quarantine PDF, 1 HTML) under `sample_docs/synthetic_v2/` with a matching
   `manifest.json`, generated deterministically by `scripts/generate_synthetic_docs.py`.
 
-`uv run pytest` passes **89 tests, 3 skipped** at `f4bf404` (skips are `docling`/`trafilatura`
+`uv run pytest` passes **90 tests, 3 skipped** at `ece33d3` (skips are `docling`/`trafilatura`
 `importorskip` guards in `tests/integration/test_synthetic_v2_corpus.py` when those optional
 `ingest` extras are not installed); `uv run ruff check .` and `uv run mypy` report no issues.
+Merge commits `edfa173` (PR#13, LLM gateway `_strictify` strict-mode fix) and `7456565` (PR#14,
+answer-composer/extraction-service inline JSON-format hints and one-retry validation) hardened
+the LLM gateway/composer path after `f4bf404`; `.serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md`
+records the completed `dataeyes.ai` key discovery (`ece33d3`, see `mem:TECHDEBT-01-NOW`).
 
 ## Contracts And Data
 
@@ -105,5 +109,5 @@ Update this index whenever a new durable memory is added, renamed, split, or del
 - `make ci`: verifies backend ruff/mypy/pytest and frontend typecheck/build.
 - `make eval`: runs `scripts/run_eval.py` (12 hardcoded `EVAL_QUESTIONS`).
 - `docker compose config`: verifies Compose syntax without requiring local secrets.
-- `uv run pytest`: 89 tests pass, 3 skipped at `f4bf404`; `uv run ruff check .` and
+- `uv run pytest`: 90 tests pass, 3 skipped at `ece33d3`; `uv run ruff check .` and
   `uv run mypy` report no issues.

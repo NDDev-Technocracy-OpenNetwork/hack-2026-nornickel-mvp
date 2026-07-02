@@ -1,7 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: f4bf404 Merge pull request #11 from rldyourmnd/feat/w5-corpus-eval-hardening
-Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; .env.example; .github/workflows/ci.yml; tests/
+Last commit: ece33d3 docs(plans): record completed dataeyes discovery and configured dev model
+Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; .env.example; .github/workflows/ci.yml; tests/; .serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md
 Area: TECHDEBT
 -->
 
@@ -43,6 +43,18 @@ Capture verified current gaps after waves W0-W5, without using memory as a backl
   `client_max_body_size 6m`, matching the FastAPI code default `5242880` bytes; no known
   mismatch remains at HEAD (verify against `.env.example` before deploying with a larger sample
   value).
+- **`dataeyes.ai` key blocked**: resolved. `.serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md`
+  "Discovery Results (2026-07-03, working key — COMPLETE)" confirms a working key against
+  `https://platform.dataeyes.ai/v1` (180-model catalog) and RU guided-JSON smoke results across
+  `gpt-5.4-mini`, `deepseek-v3.2-251201`, `qwen3.5-27b`, `glm-4.7`, `Moonshot-Kimi-K2-Instruct`.
+  Because providers do not reliably enforce `json_schema`, `src/nornikel_kg/adapters/llm/
+  gateway.py` gained `_strictify()` (adds `additionalProperties: false` recursively before every
+  `generate_json` call, tested by
+  `tests/unit/test_llm_gateway.py::test_strictify_adds_additional_properties`) and
+  `answer_composer.py`/`extraction_service.py` now spell the required JSON shape out inline in
+  the prompt text, with one reminder-regeneration attempt on a `ValidationError` before the
+  deterministic fallback (see `mem:ARCH-01-EVIDENCE-MVP`). This closes the previously-recorded
+  "LLM key blocked" gap; see the new proprietary-model gap below for what remains open.
 
 ## Entry Points
 
@@ -59,8 +71,9 @@ Capture verified current gaps after waves W0-W5, without using memory as a backl
 The system is a working evidence-led product with real ingestion (Docling/trafilatura),
 extraction (dictionary+GLiNER+LLM), retrieval (Qdrant hybrid), LLM-gated answer synthesis, graph
 analytics (conflicts/gaps/timeline), and a 17-source synthetic corpus. Gates: `make ci` green —
-89 passed, 3 skipped (docling/trafilatura optional-dependency skips); `ruff`/`mypy` strict
-clean; `make eval` — 12 questions pass offline (deterministic path, `LLM_ENABLED=false`). Server:
+90 passed, 3 skipped (docling/trafilatura optional-dependency skips); `ruff`/`mypy` strict
+clean; `make eval` — 12 questions pass offline (deterministic path, `LLM_ENABLED=false` remains
+the tracked `.env.example` default). Server:
 `https://nornikel.nddev.asia` runs the full stack; Docling PDF/DOCX ingest verified live; Qdrant
 reindexed (76+ units per the server run log); eval runs stored; Langfuse v3 runs at
 `/srv/langfuse` (`lf-net`).
@@ -87,19 +100,27 @@ change.
 
 ## Known Gaps
 
-- **LLM key blocked**: hackathon LLM rules forbid OpenAI/Anthropic; the intended provider is
-  `dataeyes.ai` via LiteLLM, but `LLM_EXTRACTION_MODEL`/`LLM_ANSWER_MODEL` remain blank in
-  `.env.example` and `LLM_ENABLED=false` is still the default at HEAD. Per hackathon delivery
-  context, the server's own `.env` (not committed) currently configures an interim non-open-
-  weight dev model (`openai/gpt-5.5-mini`) that must be replaced with a verified open-weight
-  `dataeyes.ai` catalog model before the submission freeze; this interim server config is not
-  reflected in this repository's tracked files and is not verifiable from the working tree.
-- **Timeline empty until decision entities have dates**: `GET /graph/timeline` only returns
-  `decision`/`conclusion` entities whose `metadata` dict has a `date` key
-  (`services/api/routes/graph.py`); if extraction has not yet produced dated decision/conclusion
-  entities for the active ledger, the endpoint returns an empty `events` list rather than an
-  error — this is expected behavior, not a bug, but the timeline is only useful once such
-  entities exist.
+- **Proprietary dev model configured on the live stand (must swap before freeze)**:
+  `.serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md` records the owner's dev decision to run
+  `LLM_ENABLED=true` on the `nornikel.nddev.asia` stand since 2026-07-03 with
+  `LLM_EXTRACTION_MODEL=LLM_ANSWER_MODEL=openai/gpt-5.4-mini`; this is a proprietary model and
+  violates the hackathon's open-weight-only rule (`.claude/CLAUDE.md` "LLM Constraints"). The
+  same discovery identified `deepseek-v3.2-251201` (7 s RU guided-JSON latency, clean JSON, HF
+  weights) as the verified open-weight replacement candidate; the server `.env` override is not
+  committed and `.env.example` still defaults `LLM_ENABLED=false` with blank
+  `LLM_EXTRACTION_MODEL`/`LLM_ANSWER_MODEL`, so this gap is not visible from the tracked
+  working tree alone — swap the model before the submission freeze.
+- **LLM answer latency**: end-to-end `/qa/ask` latency in LLM mode was reported at roughly 32 s
+  p50 during stand validation on 2026-07-03 (owner/session observation against the live stand;
+  not reproducible from a committed fixture or test, since CI keeps `LLM_ENABLED=false` with
+  deterministic fakes per `mem:TEST-01-EVALUATION-GATES`) — a smaller evidence packet or a
+  faster catalog model is a candidate optimization before demo.
+- **Timeline events without dates**: `GET /graph/timeline` only returns `decision`/`conclusion`
+  entities whose `metadata` dict has a `date` key (`services/api/routes/graph.py`); browser
+  validation of the live stand on 2026-07-03 (`browser/llm-answer-s2.png`, gitignored) shows the
+  synthetic-v2 ledger already has 2 timeline events (one `decision`, one `conclusion`) but both
+  render "без даты" (no date), so date extraction into `metadata.date` for these entity types is
+  still an open gap, not just a theoretical empty-list case.
 - **Entity-resolution embedding fallback not wired**: `EntityResolutionService`'s docstring
   documents a planned cosine->=0.90 embedding-fallback stage against a Qdrant `entities`
   collection, but `resolve_or_create` only implements exact-key and alias matching; the

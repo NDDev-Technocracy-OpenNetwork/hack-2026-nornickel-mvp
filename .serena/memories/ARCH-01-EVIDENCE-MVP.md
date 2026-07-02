@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: f4bf404 Merge pull request #11 from rldyourmnd/feat/w5-corpus-eval-hardening
+Last commit: ece33d3 docs(plans): record completed dataeyes discovery and configured dev model
 Scope: apps/web/; services/api/; src/nornikel_kg/; docker-compose.yml; .github/workflows/ci.yml; pyproject.toml; .serena/newproj/nornikel-kg-search/; README.md
 Area: ARCH
 -->
@@ -53,13 +53,23 @@ after waves W0-W5.
 - `src/nornikel_kg/services/answer_composer.py`: `LLMAnswerComposer.compose` — strict JSON
   sentences citing `span_id`s from the packet; drops unsupported sentences, allows one
   regeneration, falls back to the deterministic summary on repeated failure or when no evidence
-  exists.
+  exists. Because providers do not always enforce `response_format`/`json_schema`, the packet
+  prompt (`_packet_prompt`) also spells out the exact required structure
+  (`{"sentences": [{"sentence": ..., "supporting_span_ids": [...]}]}`) inline as text; a
+  `ValidationError` on attempt 1 sends one reminder-regeneration attempt before falling back on
+  attempt 2. `src/nornikel_kg/services/extraction_service.py`'s `_llm_mentions` adds the same
+  kind of inline format hint (entities/relations JSON shape) ahead of the fragment text for
+  extraction calls.
 - `src/nornikel_kg/domain/analysis.py`: `ConflictDetector` (contradictory_direction,
   method_mismatch, numeric_disagreement > 15% under the same method, grouped by
   material+property+regime bucket) and `GapAnalyzer` (material x regime x property coverage
   over dictionary-seeded entities only).
 - `src/nornikel_kg/adapters/llm/gateway.py`: `LiteLLMGateway` — the only module allowed to
   `import litellm`; enforced by `tests/unit/test_llm_gateway.py::test_litellm_imported_only_inside_llm_adapter`.
+  `_strictify(schema)` recursively sets `additionalProperties: false` on every object schema (and
+  recurses into `array.items`) before every `generate_json` call, required for OpenAI-compatible
+  strict `json_schema` mode; covered by
+  `tests/unit/test_llm_gateway.py::test_strictify_adds_additional_properties`.
 - `apps/web/src/`: React/Vite workbench; new widgets `widgets/graph-view` (force-graph
   neighborhood, `react-force-graph-2d@1.29`), `widgets/gaps-board` (coverage matrix,
   clickable cells), `widgets/timeline` (decisions/conclusions timeline).
@@ -131,6 +141,6 @@ update ADRs if a stack boundary changes.
 ## Verification
 
 - `make ci`: backend/frontend gate (`uv run ruff check .`, `uv run mypy`,
-  `uv run pytest` — 89 passed, 3 skipped at `f4bf404` — plus frontend typecheck/build).
+  `uv run pytest` — 90 passed, 3 skipped at `ece33d3` — plus frontend typecheck/build).
 - `make eval`: deterministic + retrieval-augmented evidence packet verification (12 questions).
 - `docker compose config`: validates server-first Compose wiring (`api`, `web`, `qdrant`).
