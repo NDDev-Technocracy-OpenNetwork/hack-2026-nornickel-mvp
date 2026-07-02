@@ -100,16 +100,14 @@ change.
 
 ## Known Gaps
 
-- **Proprietary dev model configured on the live stand (must swap before freeze)**:
-  `.serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md` records the owner's dev decision to run
-  `LLM_ENABLED=true` on the `nornikel.nddev.asia` stand since 2026-07-03 with
-  `LLM_EXTRACTION_MODEL=LLM_ANSWER_MODEL=openai/gpt-5.4-mini`; this is a proprietary model and
-  violates the hackathon's open-weight-only rule (`.claude/CLAUDE.md` "LLM Constraints"). The
-  same discovery identified `deepseek-v3.2-251201` (7 s RU guided-JSON latency, clean JSON, HF
-  weights) as the verified open-weight replacement candidate; the server `.env` override is not
-  committed and `.env.example` still defaults `LLM_ENABLED=false` with blank
-  `LLM_EXTRACTION_MODEL`/`LLM_ANSWER_MODEL`, so this gap is not visible from the tracked
-  working tree alone — swap the model before the submission freeze.
+- **Stand model `openai/gpt-5.4-mini` — approved by organizers (gap resolved 2026-07-03)**:
+  `.serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md` records that the organizers explicitly
+  approved `gpt-5.4-mini` for this team (owner confirmation, 2026-07-03), so the earlier
+  mandatory pre-freeze swap is withdrawn. `LLM_ENABLED=true` runs on the `nornikel.nddev.asia`
+  stand with `LLM_EXTRACTION_MODEL=LLM_ANSWER_MODEL=openai/gpt-5.4-mini` (server `.env`, not
+  committed; `.env.example` still defaults `LLM_ENABLED=false`). `deepseek-v3.2-251201`
+  (7 s RU guided-JSON, clean JSON, HF weights) remains the documented one-line fallback if the
+  approval changes.
 - **LLM answer latency**: end-to-end `/qa/ask` latency in LLM mode was reported at roughly 32 s
   p50 during stand validation on 2026-07-03 (owner/session observation against the live stand;
   not reproducible from a committed fixture or test, since CI keeps `LLM_ENABLED=false` with

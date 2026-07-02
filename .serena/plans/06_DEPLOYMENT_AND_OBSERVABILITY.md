@@ -83,10 +83,12 @@ this file under "Discovery Results" and pick model IDs.
   completion tokens (thinking); `Moonshot-Kimi-K2-Instruct` — requires "json" in
   messages. Providers do NOT reliably enforce `json_schema` → prompts carry the
   format inline and invalid payloads get one reminder regeneration.
-- **Configured (owner decision, dev): `openai/gpt-5.4-mini`** for extraction and
-  answers; `LLM_ENABLED=true` on the stand since 2026-07-03. Proprietary-model
-  caveat below still applies — switch to `deepseek-v3.2-251201` (verified open
-  weights) before demo freeze.
+- **Configured: `openai/gpt-5.4-mini`** for extraction and answers;
+  `LLM_ENABLED=true` on the stand since 2026-07-03.
+  **Organizers approved this model for the team (owner confirmation, 2026-07-03)**
+  — the mandatory pre-freeze swap is withdrawn. `deepseek-v3.2-251201` (verified
+  open weights, 7 s clean RU JSON in smoke) stays the documented fallback if the
+  approval changes; switching is a one-line `.env` edit.
 - Embeddings stay local (`deepvk/USER-bge-m3`); catalog embeddings are
   OpenAI-proprietary and irrelevant.
 

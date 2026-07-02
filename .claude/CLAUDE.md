@@ -14,9 +14,12 @@ Owner workflow: rldyour plugins/skills.
   Plans amend `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md`.
 
 ## LLM Constraints (hackathon rules)
-- OpenAI/Anthropic APIs are forbidden; only open-weight models usable from Russia.
-- Provider: dataeyes.ai key through the LiteLLM SDK; configure only catalog models with
-  verified open weights. Optional Ollama fallback. Observability: self-hosted Langfuse.
+- Baseline rule: open-weight models usable from Russia. **Exception granted:
+  organizers explicitly approved `gpt-5.4-mini` for this team (owner confirmation,
+  2026-07-03) — it is the configured stand model.** Fallback if the approval changes:
+  `deepseek-v3.2-251201` (verified open weights), a one-line `.env` edit.
+- Provider: dataeyes.ai key through the LiteLLM SDK, base `https://platform.dataeyes.ai/v1`.
+  Optional Ollama fallback. Observability: self-hosted Langfuse.
 - CI never needs LLM secrets or network: all LLM paths must keep deterministic fakes.
 
 ## Durable Commands
