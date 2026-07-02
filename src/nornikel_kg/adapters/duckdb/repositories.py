@@ -19,9 +19,11 @@ from nornikel_kg.domain.models import (
     EvidenceSpan,
     ExperimentRow,
     PropertyMeasurement,
+    SecurityLabel,
     SourceIngestResponse,
     SourceSummary,
 )
+from nornikel_kg.ports.parser import ParsedDocument
 
 
 class SourceIngestError(ValueError):
@@ -173,6 +175,168 @@ class DuckDBLedgerRepository:
             warnings=warnings,
         )
 
+    def ingest_parsed_document(
+        self,
+        *,
+        source_id: str,
+        raw_sha256: str,
+        title: str,
+        document_type: str,
+        parsed: ParsedDocument,
+        artifact_locator: str,
+        security_label: SecurityLabel = "internal",
+    ) -> tuple[int, int]:
+        """Write a parsed PDF/DOCX/URL document into the ledger.
+
+        Returns (text_span_count, table_span_count).
+        """
+        self.migrate()
+        text_spans = 0
+        table_spans = 0
+        with duckdb.connect(str(self.db_path)) as connection:
+            try:
+                connection.execute("BEGIN")
+                self._delete_source_records(connection, source_id)
+                self._register_source(
+                    connection,
+                    source_id=source_id,
+                    title=title,
+                    document_type=document_type,
+                    raw_sha256=raw_sha256,
+                    security_label=security_label,
+                )
+                connection.execute(
+                    """
+                    INSERT INTO artifacts (artifact_id, source_id, artifact_type,
+                                           parser_profile, locator, meta_json)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (artifact_id) DO UPDATE SET meta_json = excluded.meta_json
+                    """,
+                    [
+                        f"art_{source_id}",
+                        source_id,
+                        document_type,
+                        parsed.parser_profile,
+                        artifact_locator,
+                        json.dumps(parsed.metadata, ensure_ascii=False, sort_keys=True),
+                    ],
+                )
+                for block in parsed.blocks:
+                    span = self.evidence_factory.create(
+                        source_id=source_id,
+                        artifact_type="text",
+                        parser_profile=parsed.parser_profile,
+                        artifact_locator=artifact_locator,
+                        span_type="text",
+                        visible_text=block.text,
+                        page=block.page,
+                        stable_locator=block.locator or "block_unknown",
+                        validation_status="validated_rule",
+                        evidence_confidence=0.97,
+                        security_label=security_label,
+                    )
+                    self._insert_evidence_span(connection, span)
+                    text_spans += 1
+                for table in parsed.tables:
+                    for row in table.rows:
+                        row_locator = f"table_{table.table_index}:row_{row.row_index}"
+                        row_span = self.evidence_factory.create(
+                            source_id=source_id,
+                            artifact_type="table",
+                            parser_profile=parsed.parser_profile,
+                            artifact_locator=artifact_locator,
+                            span_type="table_row",
+                            visible_text=row.text,
+                            page=table.page,
+                            stable_locator=row_locator,
+                            validation_status="validated_rule",
+                            evidence_confidence=0.97,
+                            security_label=security_label,
+                        )
+                        self._insert_evidence_span(connection, row_span)
+                        table_spans += 1
+                connection.execute("COMMIT")
+            except Exception:
+                connection.execute("ROLLBACK")
+                raise
+        return text_spans, table_spans
+
+    def record_ingestion_run(
+        self,
+        *,
+        run_id: str,
+        source_id: str,
+        status: str,
+        stage: str,
+        error: str | None = None,
+        counters: dict[str, int] | None = None,
+    ) -> None:
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            connection.execute(
+                """
+                INSERT INTO ingestion_runs (run_id, source_id, status, stage, error, counters_json)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (run_id) DO UPDATE SET
+                  status = excluded.status,
+                  stage = excluded.stage,
+                  error = excluded.error,
+                  counters_json = excluded.counters_json
+                """,
+                [
+                    run_id,
+                    source_id,
+                    status,
+                    stage,
+                    error,
+                    json.dumps(counters or {}, ensure_ascii=False, sort_keys=True),
+                ],
+            )
+
+    def list_ingestion_runs(self, source_id: str | None = None) -> list[dict[str, Any]]:
+        self.migrate()
+        where_clause = "WHERE source_id = ?" if source_id else ""
+        params: list[str] = [source_id] if source_id else []
+        with duckdb.connect(str(self.db_path)) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT run_id, source_id, status, stage, error, counters_json, created_at
+                FROM ingestion_runs
+                {where_clause}
+                ORDER BY created_at DESC
+                """,
+                params,
+            ).fetchall()
+        return [
+            {
+                "run_id": str(row[0]),
+                "source_id": str(row[1]),
+                "status": str(row[2]),
+                "stage": str(row[3]),
+                "error": row[4],
+                "counters": json.loads(str(row[5] or "{}")),
+                "created_at": str(row[6]),
+            }
+            for row in rows
+        ]
+
+    def latest_run_statuses(self) -> dict[str, str]:
+        """Map source_id -> most recent ingestion run status."""
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            rows = connection.execute(
+                """
+                SELECT source_id, status
+                FROM (
+                  SELECT source_id, status,
+                         ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY created_at DESC) AS rn
+                  FROM ingestion_runs
+                )
+                WHERE rn = 1
+                """
+            ).fetchall()
+        return {str(row[0]): str(row[1]) for row in rows}
+
     def load_demo_packet(self) -> EvidenceLedgerPacket:
         self.migrate()
         with duckdb.connect(str(self.db_path)) as connection:
@@ -270,10 +434,6 @@ class DuckDBLedgerRepository:
         measurements = [self._measurement_from_row(row) for row in measurement_rows]
         effects = [self._effect_from_row(row) for row in effect_rows]
         experiments = [self._experiment_from_row(row) for row in experiment_rows]
-        if not measurements or not effects:
-            raise LookupError(
-                "Evidence ledger has no measurements or effect claims. Seed fixtures first."
-            )
 
         return EvidenceLedgerPacket(
             evidence=evidence,
@@ -296,10 +456,18 @@ class DuckDBLedgerRepository:
                   s.document_type,
                   s.security_label,
                   COUNT(DISTINCT ev.span_id) AS evidence_count,
-                  COUNT(DISTINCT pm.measurement_id) AS measurement_count
+                  COUNT(DISTINCT pm.measurement_id) AS measurement_count,
+                  MAX(ir.status) AS run_status
                 FROM sources s
                 LEFT JOIN evidence_spans ev ON ev.source_id = s.source_id
                 LEFT JOIN property_measurements pm ON pm.source_id = s.source_id
+                LEFT JOIN (
+                  SELECT source_id, status,
+                         ROW_NUMBER() OVER (
+                           PARTITION BY source_id ORDER BY created_at DESC
+                         ) AS rn
+                  FROM ingestion_runs
+                ) ir ON ir.source_id = s.source_id AND ir.rn = 1
                 GROUP BY s.source_id, s.title, s.document_type, s.security_label, s.created_at
                 ORDER BY s.created_at DESC, s.title
                 """
@@ -310,7 +478,7 @@ class DuckDBLedgerRepository:
                 title=str(row[1]),
                 document_type=str(row[2]),
                 security_label=row[3],
-                status="ledger",
+                status=str(row[6]) if row[6] else "ledger",
                 evidence_count=int(row[4]),
                 measurement_count=int(row[5]),
             )

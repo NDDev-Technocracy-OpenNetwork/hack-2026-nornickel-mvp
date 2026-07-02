@@ -126,6 +126,20 @@ export async function uploadSource(file: File): Promise<SourceIngestResponse> {
   return (await response.json()) as SourceIngestResponse;
 }
 
+export async function importUrl(url: string): Promise<SourceIngestResponse> {
+  const response = await fetch(`${API_BASE_URL}/sources/import-url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "URL import failed"));
+  }
+
+  return (await response.json()) as SourceIngestResponse;
+}
+
 export async function deleteSource(sourceId: string): Promise<{ source_id: string; deleted: boolean }> {
   const response = await fetch(`${API_BASE_URL}/sources/${sourceId}`, {
     method: "DELETE",

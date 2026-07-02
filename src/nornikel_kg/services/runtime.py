@@ -6,6 +6,7 @@ from pathlib import Path
 from threading import Lock
 
 from nornikel_kg.adapters.duckdb.repositories import DuckDBLedgerRepository
+from nornikel_kg.services.ingestion_service import IngestionService
 from nornikel_kg.services.qa_service import DemoQAService
 
 _repository_build_lock = Lock()
@@ -43,3 +44,9 @@ def get_ledger_repository() -> DuckDBLedgerRepository:
 @lru_cache
 def get_qa_service() -> DemoQAService:
     return DemoQAService(ledger_repository=get_ledger_repository())
+
+
+@lru_cache
+def get_ingestion_service() -> IngestionService:
+    artifact_root = resolve_project_path(os.getenv("ARTIFACT_ROOT", "data/artifacts"))
+    return IngestionService(get_ledger_repository(), artifact_root=artifact_root)

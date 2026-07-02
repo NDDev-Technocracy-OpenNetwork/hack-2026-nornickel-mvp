@@ -12,8 +12,10 @@ from services.api.main import create_app
 
 def client_with_tmp_ledger(tmp_path: Path, monkeypatch: MonkeyPatch) -> TestClient:
     monkeypatch.setenv("DUCKDB_PATH", str(tmp_path / "catalog.duckdb"))
+    monkeypatch.setenv("ARTIFACT_ROOT", str(tmp_path / "artifacts"))
     runtime.get_ledger_repository.cache_clear()
     runtime.get_qa_service.cache_clear()
+    runtime.get_ingestion_service.cache_clear()
     return TestClient(create_app())
 
 
@@ -349,7 +351,7 @@ def test_sources_upload_rejects_unsupported_extension(
 
     response = client.post(
         "/sources/upload",
-        files={"file": ("report.pdf", b"%PDF-1.4", "application/pdf")},
+        files={"file": ("report.exe", b"MZ binary", "application/octet-stream")},
     )
 
     assert response.status_code == 400
