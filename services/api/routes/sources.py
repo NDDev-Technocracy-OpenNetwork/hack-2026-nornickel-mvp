@@ -187,6 +187,21 @@ def enrich_source(source_id: str) -> dict[str, object]:
     return {"source_id": source_id, "scheduled": True}
 
 
+@router.post("/reindex-all")
+def reindex_all() -> dict[str, object]:
+    """Rebuild the vector index for every source in one batched background pass."""
+    import threading
+
+    from nornikel_kg.services.runtime import get_retrieval_service
+
+    service = get_retrieval_service()
+    if not service.enabled:
+        return {"scheduled": False, "reason": "retrieval index disabled"}
+    thread = threading.Thread(target=service.reindex_all, name="reindex-all", daemon=True)
+    thread.start()
+    return {"scheduled": True}
+
+
 @router.get("/{source_id}/runs")
 def list_source_runs(source_id: str) -> dict[str, list[dict[str, object]]]:
     repository = get_ledger_repository()
