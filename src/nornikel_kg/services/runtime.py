@@ -95,7 +95,15 @@ def get_ingestion_service() -> IngestionService:
 @lru_cache
 def get_extraction_service() -> ExtractionService:
     settings = LLMSettings()
-    llm = build_llm(settings) if settings.llm_enabled else None
+    # LLM_EXTRACTION_ENABLED gates ingest-time LLM calls separately from the
+    # QA answer composer: real-corpus batches showed extraction payloads being
+    # rejected consistently, so dictionary rules carry ingest by default.
+    extraction_llm_on = os.getenv("LLM_EXTRACTION_ENABLED", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    llm = build_llm(settings) if settings.llm_enabled and extraction_llm_on else None
     use_gliner = os.getenv("GLINER_ENABLED", "true").lower() in {"1", "true", "yes"}
     return ExtractionService(get_ledger_repository(), llm=llm, use_gliner=use_gliner)
 
