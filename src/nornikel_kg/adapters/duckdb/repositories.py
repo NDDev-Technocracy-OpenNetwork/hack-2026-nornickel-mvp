@@ -828,7 +828,8 @@ class DuckDBLedgerRepository:
                   e.direction,
                   e.delta_value,
                   e.delta_unit,
-                  e.supporting_span_ids_json
+                  e.supporting_span_ids_json,
+                  m.method
                 FROM property_measurements m
                 JOIN effect_claims e
                   ON m.experiment_id = e.experiment_id
@@ -1438,6 +1439,7 @@ class DuckDBLedgerRepository:
                 "delta_value": None if row[13] is None else float(row[13]),
                 "delta_unit": None if row[14] is None else str(row[14]),
                 "effect_direction": str(row[12]),
+                "method": None if len(row) < 17 or row[16] is None else str(row[16]),
             },
             evidence_ids=evidence_ids,
             validation_status=row[7],

@@ -33,7 +33,18 @@ fallback), local `deepvk/USER-bge-m3` embeddings, and self-hosted Langfuse
 observability. `LLM_ENABLED=false` keeps every pipeline deterministic and offline —
 this is the default for CI and the demo safety net.
 
-Live stand: `https://nornikel.nddev.asia` (interim mirror: `https://fa.nddev.asia`).
+Live stand: `https://nornikel.nddev.asia` (interim mirror: `https://fa.nddev.asia`);
+deployment notes: `docs/deployment/nornikel-nddev.md`.
+
+Implemented beyond the P0 scaffold (waves W0–W5, 2026-07-02): Docling PDF/DOCX ingest
+with honest quarantine for scans, trafilatura URL import, GLiNER+dictionary+LLM
+extraction with entity resolution (exact key → alias → create; never merges
+near-duplicates), an own graph layer (DuckDB `entities`/`relations` + NetworkX
+neighborhoods), Qdrant hybrid retrieval (dense USER-bge-m3 + sparse BM25, RRF),
+LLM answer synthesis gated by the claim verifier with deterministic fallback,
+data-driven conflict detection, a gaps coverage matrix, decisions timeline,
+answer-run persistence, and the committed `sample_docs/synthetic_v2/` corpus
+(17 sources, seeded conflicts/gaps/aliases/injection) with `manifest.json`.
 
 ## Quick Start
 
