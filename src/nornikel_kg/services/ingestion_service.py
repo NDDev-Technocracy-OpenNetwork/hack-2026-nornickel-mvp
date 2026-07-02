@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
+import threading
 from pathlib import Path
 from typing import Protocol
 
@@ -49,6 +51,7 @@ class IngestionService:
         artifact_root: Path | None = None,
         extraction_service: ExtractionServiceProtocol | None = None,
         retrieval_service: IndexingServiceProtocol | None = None,
+        synchronous_enrichment: bool = True,
     ) -> None:
         self.repository = repository
         self._parser = parser
@@ -56,6 +59,7 @@ class IngestionService:
         self.artifact_root = artifact_root
         self.extraction_service = extraction_service
         self.retrieval_service = retrieval_service
+        self.synchronous_enrichment = synchronous_enrichment
 
     @property
     def parser(self) -> DocumentParserPort:
@@ -170,18 +174,69 @@ class IngestionService:
             parsed=parsed,
             artifact_locator=filename,
         )
-        extraction_counters = self._run_extraction(source_id)
+        self._apply_source_metadata(source_id, filename, parsed)
         self._record_run(
             source_id=source_id,
-            status="completed",
-            stage="ledger_write",
-            counters={
-                "text_spans": text_spans,
-                "table_spans": table_spans,
-                **extraction_counters,
-            },
+            status="running",
+            stage="extraction",
+            counters={"text_spans": text_spans, "table_spans": table_spans},
+        )
+        self._schedule_enrichment(
+            source_id, base_counters={"text_spans": text_spans, "table_spans": table_spans}
         )
         return self._response_for(source_id)
+
+    def _apply_source_metadata(
+        self, source_id: str, filename: str, parsed: ParsedDocument
+    ) -> None:
+        """Year + geography heuristics for query-time filters.
+
+        Year: the most recent plausible year in the filename or head text.
+        Geography: `ru` when the head text is predominantly Cyrillic, else
+        `foreign` — a coarse but honest split for the track's
+        «отечественная vs зарубежная практика» filter.
+        """
+        head = " ".join(block.text for block in parsed.blocks[:20])[:3000]
+        years = [
+            int(match)
+            for match in re.findall(r"\b(19[5-9]\d|20[0-4]\d)\b", f"{filename} {head}")
+        ]
+        year = max(years) if years else None
+        cyrillic = sum(1 for ch in head if "а" <= ch.lower() <= "я")
+        latin = sum(1 for ch in head if "a" <= ch.lower() <= "z")
+        geography = None
+        if cyrillic + latin > 40:
+            geography = "ru" if cyrillic >= latin else "foreign"
+        try:
+            self.repository.set_source_metadata(source_id, year=year, geography=geography)
+        except Exception:  # metadata is best-effort, never blocks ingest
+            logger.warning("Could not set source metadata for %s", source_id, exc_info=True)
+
+    def _schedule_enrichment(self, source_id: str, *, base_counters: dict[str, int]) -> None:
+        """Run extraction+indexing off the request thread.
+
+        Real reports carry hundreds of spans; enrichment can take minutes and
+        must never hold an HTTP request (or its proxy timeout) hostage. Spans
+        are already committed — the run row tracks progress to completed.
+        """
+
+        def enrich() -> None:
+            counters = dict(base_counters)
+            counters.update(self._run_extraction(source_id))
+            self._record_run(
+                source_id=source_id,
+                status="completed",
+                stage="ledger_write",
+                counters=counters,
+            )
+
+        if self.synchronous_enrichment:
+            enrich()
+            return
+        thread = threading.Thread(
+            target=enrich, name=f"enrich-{source_id[:16]}", daemon=True
+        )
+        thread.start()
 
     def _quarantine(
         self,

@@ -82,11 +82,13 @@ def get_retrieval_service() -> RetrievalService:
 @lru_cache
 def get_ingestion_service() -> IngestionService:
     artifact_root = resolve_project_path(os.getenv("ARTIFACT_ROOT", "data/artifacts"))
+    synchronous = os.getenv("SYNC_ENRICHMENT", "false").lower() in {"1", "true", "yes"}
     return IngestionService(
         get_ledger_repository(),
         artifact_root=artifact_root,
         extraction_service=get_extraction_service(),
         retrieval_service=get_retrieval_service(),
+        synchronous_enrichment=synchronous,
     )
 
 

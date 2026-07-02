@@ -15,6 +15,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     monkeypatch.setenv("DUCKDB_PATH", str(tmp_path / "graph.duckdb"))
     monkeypatch.setenv("ARTIFACT_ROOT", str(tmp_path / "artifacts"))
     monkeypatch.setenv("GLINER_ENABLED", "false")
+    monkeypatch.setenv("SYNC_ENRICHMENT", "true")
     for cache in (
         runtime.get_ledger_repository,
         runtime.get_qa_service,

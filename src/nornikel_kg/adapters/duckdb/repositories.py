@@ -87,6 +87,8 @@ class DuckDBLedgerRepository:
             self._ensure_column(connection, "effect_claims", "source_id", "TEXT")
             self._ensure_column(connection, "effect_claims", "material_name", "TEXT")
             self._ensure_column(connection, "effect_claims", "regime_summary", "TEXT")
+            self._ensure_column(connection, "sources", "year", "INTEGER")
+            self._ensure_column(connection, "sources", "geography", "TEXT")
             load_dictionaries(connection)
         self._migrated = True
 
@@ -610,6 +612,32 @@ class DuckDBLedgerRepository:
             }
             for row in rows
         ]
+
+    def set_source_metadata(
+        self, source_id: str, *, year: int | None, geography: str | None
+    ) -> None:
+        self.migrate()
+        with self._connect() as connection:
+            connection.execute(
+                "UPDATE sources SET year = COALESCE(?, year), "
+                "geography = COALESCE(?, geography) WHERE source_id = ?",
+                [year, geography, source_id],
+            )
+
+    def source_metadata(self) -> dict[str, dict[str, Any]]:
+        """source_id -> {year, geography} for query-time filtering."""
+        self.migrate()
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT source_id, year, geography FROM sources"
+            ).fetchall()
+        return {
+            str(row[0]): {
+                "year": None if row[1] is None else int(row[1]),
+                "geography": None if row[2] is None else str(row[2]),
+            }
+            for row in rows
+        }
 
     def record_answer_run(
         self,

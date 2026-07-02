@@ -151,6 +151,10 @@ class AskFilters(BaseModel):
     regime: list[str] = Field(default_factory=list)
     experiment_id: list[str] = Field(default_factory=list)
     regime_id: list[str] = Field(default_factory=list)
+    # Track requirements: geography (ru/foreign) and publication-year window.
+    geography: list[str] = Field(default_factory=list)
+    year_from: int | None = None
+    year_to: int | None = None
 
     @field_validator(
         "source_ids",
@@ -163,6 +167,7 @@ class AskFilters(BaseModel):
         "regime",
         "experiment_id",
         "regime_id",
+        "geography",
         mode="before",
     )
     @classmethod

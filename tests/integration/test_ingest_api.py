@@ -20,6 +20,7 @@ from services.api.main import app
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("DUCKDB_PATH", str(tmp_path / "api.duckdb"))
     monkeypatch.setenv("ARTIFACT_ROOT", str(tmp_path / "artifacts"))
+    monkeypatch.setenv("SYNC_ENRICHMENT", "true")
     runtime.get_ledger_repository.cache_clear()
     runtime.get_qa_service.cache_clear()
     runtime.get_ingestion_service.cache_clear()

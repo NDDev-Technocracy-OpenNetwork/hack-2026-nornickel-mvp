@@ -91,7 +91,14 @@ def test_alias_mention_merges_into_canonical_entity(
 
 
 def test_invalid_llm_payload_falls_back_to_rules(repository: DuckDBLedgerRepository) -> None:
-    _ingest_text(repository, "src_llm", ["Ni-30Cu и отжиг."])
+    _ingest_text(
+        repository,
+        "src_llm",
+        [
+            "Сплав Ni-30Cu подвергался отжигу при температуре 850 градусов "
+            "в атмосфере аргона в течение двух часов."
+        ],
+    )
     fake = FakeLLM(canned={"extraction": {"not": "matching schema"}})
     service = ExtractionService(repository, llm=fake, use_gliner=False)
     counters = service.process_source("src_llm")
@@ -100,7 +107,14 @@ def test_invalid_llm_payload_falls_back_to_rules(repository: DuckDBLedgerReposit
 
 
 def test_valid_llm_payload_adds_mentions(repository: DuckDBLedgerRepository) -> None:
-    _ingest_text(repository, "src_llm2", ["Работы выполняла лаборатория метallургии."])
+    _ingest_text(
+        repository,
+        "src_llm2",
+        [
+            "Работы по подготовке и аттестации образцов выполняла "
+            "лаборатория металлургии в первом квартале года."
+        ],
+    )
     fake = FakeLLM(
         canned={
             "extraction": {

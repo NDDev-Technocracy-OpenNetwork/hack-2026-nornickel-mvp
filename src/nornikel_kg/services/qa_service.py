@@ -37,6 +37,29 @@ MATERIAL_SPACED_TOKEN_RE = re.compile(
 )
 
 
+_NUMERIC_CONSTRAINT_RE = re.compile(
+    r"(?P<op>≤|<=|не более|не выше|менее|до|≥|>=|не менее|не ниже|более|от)\s*"
+    r"(?P<value>\d+(?:[.,]\d+)?)\s*"
+    r"(?P<unit>мг/дм3|мг/дм³|мг/л|г/л|м3/ч|м³/ч|л/мин|м/с|%|c|°c|ч)?",
+    re.IGNORECASE,
+)
+
+_LE_OPS = {"≤", "<=", "не более", "не выше", "менее", "до"}
+
+
+def _parse_numeric_constraints(question: str) -> list[tuple[str, float, str]]:
+    """(op, value, normalized_unit) triples from a natural-language question."""
+    constraints: list[tuple[str, float, str]] = []
+    for match in _NUMERIC_CONSTRAINT_RE.finditer(question):
+        op_text = match.group("op").lower()
+        op = "<=" if op_text in _LE_OPS else ">="
+        value = float(match.group("value").replace(",", "."))
+        unit = (match.group("unit") or "").lower().replace(" ", "")
+        unit = unit.replace("³", "3").replace("°c", "c")
+        constraints.append((op, value, unit))
+    return constraints
+
+
 class RetrievalServiceProtocol(Protocol):
     def retrieve_span_ids(
         self,
@@ -75,6 +98,9 @@ class RunRecorderProtocol(Protocol):
         verification: dict[str, Any],
     ) -> None:
         """Persist replayable answer-run metadata."""
+
+    def source_metadata(self) -> dict[str, dict[str, Any]]:
+        """source_id -> {year, geography} for scope filters."""
 
 
 class DemoQAService:
@@ -118,6 +144,10 @@ class DemoQAService:
             for experiment in selected_experiments
             if any(span_id in allowed_span_ids for span_id in experiment.evidence_ids)
         ]
+        selected_experiments = self._apply_source_scope(selected_experiments, request.filters)
+        selected_experiments = self._apply_numeric_constraints(
+            request.question, selected_experiments
+        )
         selected_evidence = self._evidence_for_experiments(allowed_evidence, selected_experiments)
         selected_evidence = self._augment_with_retrieval(
             request=request,
@@ -191,6 +221,66 @@ class DemoQAService:
                     verification=verification.model_dump(),
                 )
         return response
+
+    def _apply_source_scope(
+        self,
+        experiments: list[ExperimentRow],
+        filters: AskFilters | None,
+    ) -> list[ExperimentRow]:
+        """Geography / publication-year filters (track: «отечественная vs зарубежная»)."""
+        if filters is None or (
+            not filters.geography and filters.year_from is None and filters.year_to is None
+        ):
+            return experiments
+        recorder = self.run_recorder
+        if recorder is None:
+            return experiments
+        metadata = recorder.source_metadata()
+
+        def keeps(experiment: ExperimentRow) -> bool:
+            meta = metadata.get(experiment.source_id or "", {})
+            if filters.geography:
+                geography = meta.get("geography")
+                if geography is None or geography not in filters.geography:
+                    return False
+            year = meta.get("year")
+            if filters.year_from is not None and (year is None or year < filters.year_from):
+                return False
+            return not (
+                filters.year_to is not None and (year is None or year > filters.year_to)
+            )
+
+        return [experiment for experiment in experiments if keeps(experiment)]
+
+    def _apply_numeric_constraints(
+        self,
+        question: str,
+        experiments: list[ExperimentRow],
+    ) -> list[ExperimentRow]:
+        """Numeric constraints from the question («≤300 мг/л», «не более 1000»...).
+
+        A constraint only filters experiments whose measurement unit matches;
+        unit-less experiments are kept (honest recall over silent precision).
+        """
+        constraints = _parse_numeric_constraints(question)
+        if not constraints:
+            return experiments
+
+        def keeps(experiment: ExperimentRow) -> bool:
+            raw_value = experiment.measurement.get("value")
+            raw_unit = str(experiment.measurement.get("unit") or "").lower().replace(" ", "")
+            if not isinstance(raw_value, int | float):
+                return True
+            for op, limit, unit in constraints:
+                if unit and raw_unit and unit != raw_unit:
+                    continue
+                if op == "<=" and raw_value > limit:
+                    return False
+                if op == ">=" and raw_value < limit:
+                    return False
+            return True
+
+        return [experiment for experiment in experiments if keeps(experiment)]
 
     def _augment_with_retrieval(
         self,
