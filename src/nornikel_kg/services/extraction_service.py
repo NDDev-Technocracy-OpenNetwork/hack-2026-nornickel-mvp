@@ -96,6 +96,7 @@ class ExtractionService:
     # the (CPU-bound) NER pass.
     MAX_LLM_SPANS_PER_SOURCE = 12
     MAX_SPAN_CHARS = 1200
+    MAX_CO_OCCURRENCE_ENTITIES = 12
 
     def process_source(self, source_id: str) -> dict[str, int]:
         """Run extraction over every text/table span of a source."""
@@ -189,19 +190,24 @@ class ExtractionService:
             resolved.append((entity_type, resolution.entity_id))
 
         relations = 0
-        materials = [entity_id for entity_type, entity_id in resolved if entity_type == "material"]
-        for material_id in materials:
-            for entity_type, entity_id in resolved:
-                relation_type = _CO_OCCURRENCE_RELATIONS.get(("material", entity_type))
-                if relation_type is None or entity_id == material_id:
-                    continue
-                self.repository.insert_relation(
-                    src_entity_id=material_id,
-                    relation_type=relation_type,
-                    dst_entity_id=entity_id,
-                    evidence_span_ids=[span.span_id],
-                )
-                relations += 1
+        # Dense spans (tables of contents, reference lists) mention dozens of
+        # entities at once; co-occurrence there is noise and quadratic cost.
+        if len(resolved) <= self.MAX_CO_OCCURRENCE_ENTITIES:
+            materials = [
+                entity_id for entity_type, entity_id in resolved if entity_type == "material"
+            ]
+            for material_id in materials:
+                for entity_type, entity_id in resolved:
+                    relation_type = _CO_OCCURRENCE_RELATIONS.get(("material", entity_type))
+                    if relation_type is None or entity_id == material_id:
+                        continue
+                    self.repository.insert_relation(
+                        src_entity_id=material_id,
+                        relation_type=relation_type,
+                        dst_entity_id=entity_id,
+                        evidence_span_ids=[span.span_id],
+                    )
+                    relations += 1
         return len(resolved), relations, {entity_id for _, entity_id in resolved}
 
     def _extract_mentions(
