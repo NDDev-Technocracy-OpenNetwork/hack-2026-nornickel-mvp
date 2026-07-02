@@ -78,7 +78,16 @@ strict = true
 packages = ["nornikel_kg", "services.api"]
 
 [[tool.mypy.overrides]]
-module = ["litellm", "litellm.*", "langfuse", "langfuse.*"]
+module = [
+  "litellm",
+  "litellm.*",
+  "langfuse",
+  "langfuse.*",
+  "docling",
+  "docling.*",
+  "trafilatura",
+  "trafilatura.*",
+]
 ignore_missing_imports = true
 follow_imports = "skip"
 

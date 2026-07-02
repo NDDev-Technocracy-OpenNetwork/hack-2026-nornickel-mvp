@@ -5,10 +5,12 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from pydantic import BaseModel, HttpUrl
 
 from nornikel_kg.adapters.duckdb.repositories import SourceIngestError
 from nornikel_kg.domain.models import EvidenceSpan, SourceIngestResponse, SourceSummary
-from nornikel_kg.services.runtime import get_ledger_repository
+from nornikel_kg.ports.parser import ParserError
+from nornikel_kg.services.runtime import get_ingestion_service, get_ledger_repository
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
@@ -78,7 +80,7 @@ def delete_source(source_id: str) -> dict[str, object]:
     return {"source_id": source_id, "deleted": True}
 
 
-_ALLOWED_UPLOAD_EXTENSIONS = {".csv", ".md", ".markdown", ".txt", ".text"}
+_ALLOWED_UPLOAD_EXTENSIONS = {".csv", ".md", ".markdown", ".txt", ".text", ".pdf", ".docx"}
 _ALLOWED_MIME_TYPES = {
     ".csv": {
         "text/csv",
@@ -98,6 +100,12 @@ _ALLOWED_MIME_TYPES = {
     },
     ".txt": {"text/plain"},
     ".text": {"text/plain"},
+    ".pdf": {"application/pdf", "application/octet-stream"},
+    ".docx": {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/octet-stream",
+        "application/zip",
+    },
 }
 
 
@@ -110,7 +118,10 @@ async def upload_source(file: Annotated[UploadFile, File(...)]) -> SourceIngestR
     if extension not in _ALLOWED_UPLOAD_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported upload type. Allowed: .csv, .md, .markdown, .txt, .text",
+            detail=(
+                "Unsupported upload type. "
+                "Allowed: .csv, .md, .markdown, .txt, .text, .pdf, .docx"
+            ),
         )
     if file.size is not None and file.size > max_upload_bytes:
         raise HTTPException(
@@ -140,9 +151,31 @@ async def upload_source(file: Annotated[UploadFile, File(...)]) -> SourceIngestR
             detail=f"Uploaded file is too large. Maximum allowed size is {max_upload_bytes} bytes.",
         )
     try:
-        return get_ledger_repository().ingest_source_bytes(
+        return get_ingestion_service().ingest_upload(
             filename=filename,
             content=content,
         )
     except SourceIngestError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+class ImportUrlRequest(BaseModel):
+    url: HttpUrl
+
+
+@router.post("/import-url")
+def import_url(request: ImportUrlRequest) -> SourceIngestResponse:
+    try:
+        return get_ingestion_service().ingest_url(str(request.url))
+    except ParserError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except SourceIngestError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.get("/{source_id}/runs")
+def list_source_runs(source_id: str) -> dict[str, list[dict[str, object]]]:
+    repository = get_ledger_repository()
+    if repository.get_source(source_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
+    return {"runs": repository.list_ingestion_runs(source_id)}

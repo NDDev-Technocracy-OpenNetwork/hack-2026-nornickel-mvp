@@ -6,6 +6,7 @@ import {
   askQuestion,
   listSources,
   deleteSource,
+  importUrl,
   uploadSource,
   type AskFilters,
   type AskResponse,
@@ -141,6 +142,22 @@ export function AnalysisWorkbench() {
       }
     } catch (err) {
       setArtifactError(err instanceof Error ? err.message : "Не удалось загрузить источник");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleImportUrl(url: string) {
+    setUploading(true);
+    setArtifactError(null);
+    try {
+      const result = await importUrl(url);
+      await refreshSources();
+      if (result.warnings.length > 0) {
+        setArtifactError(result.warnings.join(" "));
+      }
+    } catch (err) {
+      setArtifactError(err instanceof Error ? err.message : "Не удалось импортировать URL");
     } finally {
       setUploading(false);
     }
@@ -348,6 +365,7 @@ export function AnalysisWorkbench() {
           error={artifactError}
           loading={uploading}
           onUpload={handleUpload}
+          onImportUrl={handleImportUrl}
           onDelete={handleDeleteSource}
           sources={sources}
         />
