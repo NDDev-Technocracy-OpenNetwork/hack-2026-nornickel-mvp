@@ -20,6 +20,29 @@ EVAL_QUESTIONS = [
         "expected_gap": False,
     },
     {
+        "question_id": "q_alias_mn30_returns_cuni30",
+        "question": "Что известно по МН30 после отжига?",
+        "min_experiment_count": 1,
+        "min_evidence_count": 1,
+        "expected_material_names_contain": ["CuNi30"],
+        "expected_gap": False,
+    },
+    {
+        "question_id": "q_provenance_ideal",
+        "question": "Откуда известно про твердость Ni-30Cu после старения? Покажи источник.",
+        "min_experiment_count": 1,
+        "min_evidence_count": 1,
+        "expected_material_names": ["Ni-30Cu"],
+        "expected_gap": False,
+    },
+    {
+        "question_id": "q_comparison_two_materials",
+        "question": "Сравни Ni-30Cu и CuNi30 по твердости после старения 700 C.",
+        "min_experiment_count": 2,
+        "min_evidence_count": 2,
+        "expected_gap": False,
+    },
+    {
         "question_id": "q_gap_nicu_conductivity",
         "question": "Есть ли электропроводность для Ni-30Cu после старения 700 C 8 ч?",
         "min_experiment_count": 0,
@@ -149,6 +172,13 @@ def main() -> None:
                     failed_cases.append(
                         f"{question['question_id']}: expected materials {sorted(expected)}, "
                         f"got {sorted(material_names)}"
+                    )
+            if "expected_material_names_contain" in question:
+                required = {str(item) for item in question["expected_material_names_contain"]}
+                missing = required.difference(material_names)
+                if missing:
+                    failed_cases.append(
+                        f"{question['question_id']}: materials missing {sorted(missing)}"
                     )
             if "forbidden_material_names" in question:
                 forbidden = {str(item) for item in question["forbidden_material_names"]}
