@@ -737,3 +737,13 @@ button {
   font-size: 0.9rem;
   font-weight: 600;
 }
+
+.year-range {
+  display: flex;
+  gap: 6px;
+}
+
+.year-range input {
+  width: 50%;
+  min-width: 0;
+}

@@ -33,6 +33,9 @@ export function AnalysisWorkbench() {
   const [regimeFilter, setRegimeFilter] = useState("");
   const [experimentFilter, setExperimentFilter] = useState("");
   const [regimeIdFilter, setRegimeIdFilter] = useState("");
+  const [geographyFilter, setGeographyFilter] = useState("");
+  const [yearFromFilter, setYearFromFilter] = useState("");
+  const [yearToFilter, setYearToFilter] = useState("");
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
@@ -100,6 +103,18 @@ export function AnalysisWorkbench() {
       filters.regime_id = regimeIds;
     }
 
+    if (geographyFilter) {
+      filters.geography = [geographyFilter];
+    }
+    const yearFrom = Number.parseInt(yearFromFilter, 10);
+    if (!Number.isNaN(yearFrom)) {
+      filters.year_from = yearFrom;
+    }
+    const yearTo = Number.parseInt(yearToFilter, 10);
+    if (!Number.isNaN(yearTo)) {
+      filters.year_to = yearTo;
+    }
+
     return filters;
   }
 
@@ -123,6 +138,9 @@ export function AnalysisWorkbench() {
     setRegimeFilter("");
     setExperimentFilter("");
     setRegimeIdFilter("");
+    setGeographyFilter("");
+    setYearFromFilter("");
+    setYearToFilter("");
   }
 
   const isFilterActive =
@@ -131,7 +149,10 @@ export function AnalysisWorkbench() {
     propertyFilter.trim().length > 0 ||
     regimeFilter.trim().length > 0 ||
     experimentFilter.trim().length > 0 ||
-    regimeIdFilter.trim().length > 0;
+    regimeIdFilter.trim().length > 0 ||
+    geographyFilter.length > 0 ||
+    yearFromFilter.trim().length > 0 ||
+    yearToFilter.trim().length > 0;
 
   async function handleUpload(file: File) {
     setUploading(true);
@@ -255,6 +276,35 @@ export function AnalysisWorkbench() {
                   type="text"
                   value={regimeIdFilter}
                 />
+              </label>
+              <label className="filter-text-field">
+                <span>география</span>
+                <select
+                  className="gaps-select"
+                  onChange={(event) => setGeographyFilter(event.target.value)}
+                  value={geographyFilter}
+                >
+                  <option value="">любая</option>
+                  <option value="ru">отечественная</option>
+                  <option value="foreign">зарубежная</option>
+                </select>
+              </label>
+              <label className="filter-text-field">
+                <span>год от / до</span>
+                <div className="year-range">
+                  <input
+                    onChange={(event) => setYearFromFilter(event.target.value)}
+                    placeholder="2015"
+                    type="number"
+                    value={yearFromFilter}
+                  />
+                  <input
+                    onChange={(event) => setYearToFilter(event.target.value)}
+                    placeholder="2026"
+                    type="number"
+                    value={yearToFilter}
+                  />
+                </div>
               </label>
             </div>
 

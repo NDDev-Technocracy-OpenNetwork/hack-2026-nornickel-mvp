@@ -79,6 +79,9 @@ export type AskFilters = {
   property?: string[];
   regime?: string[];
   source_id?: string[];
+  geography?: string[];
+  year_from?: number;
+  year_to?: number;
 };
 
 export type AskRequest = {

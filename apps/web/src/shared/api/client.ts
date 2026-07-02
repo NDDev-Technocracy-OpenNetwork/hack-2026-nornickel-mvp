@@ -67,7 +67,9 @@ function hasNonEmptyFilters(filters: AskFilters | undefined): filters is AskFilt
     return false;
   }
 
-  return Object.values(filters).some((values) => values.length > 0);
+  return Object.values(filters).some((value) =>
+    Array.isArray(value) ? value.length > 0 : value !== undefined,
+  );
 }
 
 export async function askQuestion(question: string, filters?: AskFilters): Promise<AskResponse> {
