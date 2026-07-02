@@ -6,6 +6,9 @@ from pathlib import Path
 from threading import Lock
 
 from nornikel_kg.adapters.duckdb.repositories import DuckDBLedgerRepository
+from nornikel_kg.adapters.llm import LLMSettings, build_llm
+from nornikel_kg.services.extraction_service import ExtractionService
+from nornikel_kg.services.graph_service import GraphService
 from nornikel_kg.services.ingestion_service import IngestionService
 from nornikel_kg.services.qa_service import DemoQAService
 
@@ -49,4 +52,21 @@ def get_qa_service() -> DemoQAService:
 @lru_cache
 def get_ingestion_service() -> IngestionService:
     artifact_root = resolve_project_path(os.getenv("ARTIFACT_ROOT", "data/artifacts"))
-    return IngestionService(get_ledger_repository(), artifact_root=artifact_root)
+    return IngestionService(
+        get_ledger_repository(),
+        artifact_root=artifact_root,
+        extraction_service=get_extraction_service(),
+    )
+
+
+@lru_cache
+def get_extraction_service() -> ExtractionService:
+    settings = LLMSettings()
+    llm = build_llm(settings) if settings.llm_enabled else None
+    use_gliner = os.getenv("GLINER_ENABLED", "true").lower() in {"1", "true", "yes"}
+    return ExtractionService(get_ledger_repository(), llm=llm, use_gliner=use_gliner)
+
+
+@lru_cache
+def get_graph_service() -> GraphService:
+    return GraphService(get_ledger_repository())

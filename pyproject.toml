@@ -87,6 +87,10 @@ module = [
   "docling.*",
   "trafilatura",
   "trafilatura.*",
+  "gliner",
+  "gliner.*",
+  "networkx",
+  "networkx.*",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"

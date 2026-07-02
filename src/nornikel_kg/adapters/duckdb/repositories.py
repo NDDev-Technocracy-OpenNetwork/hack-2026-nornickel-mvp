@@ -11,7 +11,7 @@ from typing import Any, cast
 import duckdb
 from nornikel_kg.adapters.duckdb.dictionary_loader import load_dictionaries
 from nornikel_kg.domain.evidence import EvidenceSpanFactory
-from nornikel_kg.domain.ids import claim_id, fact_id, source_id_from_bytes
+from nornikel_kg.domain.ids import claim_id, fact_id, source_id_from_bytes, stable_hash
 from nornikel_kg.domain.ledger import EvidenceLedgerPacket
 from nornikel_kg.domain.models import (
     EffectClaim,
@@ -23,6 +23,7 @@ from nornikel_kg.domain.models import (
     SourceIngestResponse,
     SourceSummary,
 )
+from nornikel_kg.domain.normalization import canonical_key
 from nornikel_kg.ports.parser import ParsedDocument
 
 
@@ -336,6 +337,309 @@ class DuckDBLedgerRepository:
                 """
             ).fetchall()
         return {str(row[0]): str(row[1]) for row in rows}
+
+    # --- Entity / relation graph layer -------------------------------------
+
+    def find_entity(self, mention: str, entity_type: str | None = None) -> dict[str, Any] | None:
+        """Resolve a mention by canonical key first, then alias table."""
+        self.migrate()
+        key = canonical_key(mention)
+        type_clause = "AND e.entity_type = ?" if entity_type else ""
+        type_params = [entity_type] if entity_type else []
+        with duckdb.connect(str(self.db_path)) as connection:
+            row = connection.execute(
+                f"""
+                SELECT e.entity_id FROM entities e
+                WHERE e.canonical_key = ? {type_clause}
+                LIMIT 1
+                """,
+                [key, *type_params],
+            ).fetchone()
+            if row is None:
+                row = connection.execute(
+                    f"""
+                    SELECT a.entity_id FROM entity_aliases a
+                    JOIN entities e ON e.entity_id = a.entity_id
+                    WHERE a.alias_norm = ? {type_clause}
+                    LIMIT 1
+                    """,
+                    [key, *type_params],
+                ).fetchone()
+        if row is None:
+            return None
+        return self.get_entity(str(row[0]))
+
+    def get_entity(self, entity_id: str) -> dict[str, Any] | None:
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            row = connection.execute(
+                """
+                SELECT entity_id, entity_type, canonical_key, canonical_name, description,
+                       metadata_json, evidence_span_ids_json, confidence, validation_status
+                FROM entities WHERE entity_id = ?
+                """,
+                [entity_id],
+            ).fetchone()
+            if row is None:
+                return None
+            aliases = [
+                str(alias_row[0])
+                for alias_row in connection.execute(
+                    "SELECT alias FROM entity_aliases WHERE entity_id = ? ORDER BY alias",
+                    [entity_id],
+                ).fetchall()
+            ]
+        return {
+            "entity_id": str(row[0]),
+            "entity_type": str(row[1]),
+            "canonical_key": str(row[2]),
+            "canonical_name": str(row[3]),
+            "description": row[4],
+            "metadata": json.loads(str(row[5] or "{}")),
+            "evidence_span_ids": json.loads(str(row[6] or "[]")),
+            "confidence": float(row[7]),
+            "validation_status": str(row[8]),
+            "aliases": aliases,
+        }
+
+    def create_entity(
+        self,
+        *,
+        entity_id: str,
+        entity_type: str,
+        canonical_name: str,
+        evidence_span_ids: list[str],
+        metadata: dict[str, Any] | None = None,
+        confidence: float = 0.85,
+        validation_status: str = "extracted",
+    ) -> None:
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            connection.execute(
+                """
+                INSERT INTO entities (entity_id, entity_type, canonical_key, canonical_name,
+                                      metadata_json, evidence_span_ids_json, confidence,
+                                      validation_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (entity_id) DO NOTHING
+                """,
+                [
+                    entity_id,
+                    entity_type,
+                    canonical_key(canonical_name),
+                    canonical_name,
+                    json.dumps(metadata or {}, ensure_ascii=False, sort_keys=True),
+                    json.dumps(evidence_span_ids, ensure_ascii=False),
+                    confidence,
+                    validation_status,
+                ],
+            )
+            connection.execute(
+                """
+                INSERT INTO entity_aliases (alias_norm, entity_id, alias, source)
+                VALUES (?, ?, ?, 'learned')
+                ON CONFLICT (alias_norm, entity_id) DO NOTHING
+                """,
+                [canonical_key(canonical_name), entity_id, canonical_name],
+            )
+
+    def merge_entity_evidence(
+        self,
+        entity_id: str,
+        *,
+        span_ids: list[str],
+        new_alias: str | None = None,
+    ) -> None:
+        """Append unseen evidence spans (and optionally a learned alias) to an entity."""
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            row = connection.execute(
+                "SELECT evidence_span_ids_json FROM entities WHERE entity_id = ?",
+                [entity_id],
+            ).fetchone()
+            if row is None:
+                return
+            existing: list[str] = json.loads(str(row[0] or "[]"))
+            merged = existing + [span_id for span_id in span_ids if span_id not in existing]
+            connection.execute(
+                "UPDATE entities SET evidence_span_ids_json = ?, updated_at = now() "
+                "WHERE entity_id = ?",
+                [json.dumps(merged, ensure_ascii=False), entity_id],
+            )
+            if new_alias:
+                connection.execute(
+                    """
+                    INSERT INTO entity_aliases (alias_norm, entity_id, alias, source)
+                    VALUES (?, ?, ?, 'learned')
+                    ON CONFLICT (alias_norm, entity_id) DO NOTHING
+                    """,
+                    [canonical_key(new_alias), entity_id, new_alias],
+                )
+
+    def insert_relation(
+        self,
+        *,
+        src_entity_id: str,
+        relation_type: str,
+        dst_entity_id: str,
+        evidence_span_ids: list[str],
+        confidence: float = 0.85,
+        validation_status: str = "extracted",
+    ) -> str:
+        """Idempotent relation write; evidence spans are unioned on conflict."""
+        self.migrate()
+        relation_id = "rel_" + stable_hash([src_entity_id, relation_type, dst_entity_id], 20)
+        with duckdb.connect(str(self.db_path)) as connection:
+            row = connection.execute(
+                "SELECT evidence_span_ids_json FROM relations WHERE relation_id = ?",
+                [relation_id],
+            ).fetchone()
+            if row is None:
+                connection.execute(
+                    """
+                    INSERT INTO relations (relation_id, src_entity_id, relation_type,
+                                           dst_entity_id, evidence_span_ids_json, confidence,
+                                           validation_status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        relation_id,
+                        src_entity_id,
+                        relation_type,
+                        dst_entity_id,
+                        json.dumps(evidence_span_ids, ensure_ascii=False),
+                        confidence,
+                        validation_status,
+                    ],
+                )
+            else:
+                existing: list[str] = json.loads(str(row[0] or "[]"))
+                merged = existing + [s for s in evidence_span_ids if s not in existing]
+                connection.execute(
+                    "UPDATE relations SET evidence_span_ids_json = ? WHERE relation_id = ?",
+                    [json.dumps(merged, ensure_ascii=False), relation_id],
+                )
+        return relation_id
+
+    def insert_extraction_claim(
+        self,
+        *,
+        claim_id_value: str,
+        source_id: str,
+        span_id: str,
+        payload: dict[str, Any],
+        model_id: str,
+        status: str = "extracted",
+    ) -> None:
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            connection.execute(
+                """
+                INSERT INTO extraction_claims (claim_id, source_id, span_id, payload_json,
+                                               model_id, status)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (claim_id) DO UPDATE SET
+                  payload_json = excluded.payload_json,
+                  model_id = excluded.model_id,
+                  status = excluded.status
+                """,
+                [
+                    claim_id_value,
+                    source_id,
+                    span_id,
+                    json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                    model_id,
+                    status,
+                ],
+            )
+
+    def search_entities(self, query: str, *, limit: int = 20) -> list[dict[str, Any]]:
+        """Exact key, alias, then substring search over entities."""
+        self.migrate()
+        key = canonical_key(query)
+        with duckdb.connect(str(self.db_path)) as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT e.entity_id, e.entity_type, e.canonical_name,
+                       len(e.evidence_span_ids_json) AS evidence_weight,
+                       CASE
+                         WHEN e.canonical_key = ? THEN 0
+                         WHEN a.alias_norm = ? THEN 1
+                         ELSE 2
+                       END AS rank
+                FROM entities e
+                LEFT JOIN entity_aliases a ON a.entity_id = e.entity_id
+                WHERE e.canonical_key = ?
+                   OR a.alias_norm = ?
+                   OR e.canonical_key LIKE '%' || ? || '%'
+                   OR a.alias_norm LIKE '%' || ? || '%'
+                ORDER BY rank, evidence_weight DESC, e.canonical_name
+                LIMIT ?
+                """,
+                [key, key, key, key, key, key, limit],
+            ).fetchall()
+        return [
+            {
+                "entity_id": str(row[0]),
+                "entity_type": str(row[1]),
+                "canonical_name": str(row[2]),
+            }
+            for row in rows
+        ]
+
+    def list_alias_index(self) -> list[tuple[str, str, str]]:
+        """(alias_norm, entity_type, alias) triples for rule-based mention scanning."""
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            rows = connection.execute(
+                """
+                SELECT a.alias_norm, e.entity_type, a.alias
+                FROM entity_aliases a
+                JOIN entities e ON e.entity_id = a.entity_id
+                """
+            ).fetchall()
+        return [(str(row[0]), str(row[1]), str(row[2])) for row in rows]
+
+    def list_graph_entities(self) -> list[dict[str, Any]]:
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            rows = connection.execute(
+                """
+                SELECT entity_id, entity_type, canonical_name, evidence_span_ids_json
+                FROM entities
+                """
+            ).fetchall()
+        return [
+            {
+                "entity_id": str(row[0]),
+                "entity_type": str(row[1]),
+                "canonical_name": str(row[2]),
+                "evidence_count": len(json.loads(str(row[3] or "[]"))),
+            }
+            for row in rows
+        ]
+
+    def list_graph_relations(self) -> list[dict[str, Any]]:
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            rows = connection.execute(
+                """
+                SELECT relation_id, src_entity_id, relation_type, dst_entity_id,
+                       evidence_span_ids_json, confidence
+                FROM relations
+                """
+            ).fetchall()
+        return [
+            {
+                "relation_id": str(row[0]),
+                "src_entity_id": str(row[1]),
+                "relation_type": str(row[2]),
+                "dst_entity_id": str(row[3]),
+                "evidence_span_ids": json.loads(str(row[4] or "[]")),
+                "confidence": float(row[5]),
+            }
+            for row in rows
+        ]
 
     def load_demo_packet(self) -> EvidenceLedgerPacket:
         self.migrate()

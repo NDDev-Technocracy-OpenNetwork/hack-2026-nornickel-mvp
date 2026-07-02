@@ -11,6 +11,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Native libraries required by docling's vision stack (opencv/pillow backends).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 libglib2.0-0 libxcb1 libxext6 libsm6 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Dependency layer: locked resolve without the project so code edits reuse the cache.
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \

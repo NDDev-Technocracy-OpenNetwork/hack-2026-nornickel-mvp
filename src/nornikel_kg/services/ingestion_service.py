@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from pathlib import Path
+from typing import Protocol
 
 from nornikel_kg.adapters.duckdb.repositories import DuckDBLedgerRepository, SourceIngestError
 from nornikel_kg.domain.ids import source_id_from_bytes, stable_hash
@@ -22,6 +23,11 @@ PARSER_EXTENSIONS = {".pdf", ".docx"}
 TEXT_EXTENSIONS = {".csv", ".md", ".markdown", ".txt", ".text"}
 
 
+class ExtractionServiceProtocol(Protocol):
+    def process_source(self, source_id: str) -> dict[str, int]:
+        """Extract entities/relations from a source's spans."""
+
+
 class IngestionService:
     """Orchestrates source ingestion: parse -> ledger writes -> run lifecycle.
 
@@ -36,11 +42,13 @@ class IngestionService:
         parser: DocumentParserPort | None = None,
         url_fetcher: UrlFetcherPort | None = None,
         artifact_root: Path | None = None,
+        extraction_service: ExtractionServiceProtocol | None = None,
     ) -> None:
         self.repository = repository
         self._parser = parser
         self._url_fetcher = url_fetcher
         self.artifact_root = artifact_root
+        self.extraction_service = extraction_service
 
     @property
     def parser(self) -> DocumentParserPort:
@@ -70,6 +78,7 @@ class IngestionService:
             response = self.repository.ingest_source_bytes(
                 filename=filename, content=content, title=title
             )
+            extraction_counters = self._run_extraction(response.source.source_id)
             self._record_run(
                 source_id=response.source.source_id,
                 status="completed",
@@ -77,6 +86,7 @@ class IngestionService:
                 counters={
                     "evidence_spans": response.evidence_count,
                     "measurements": response.measurement_count,
+                    **extraction_counters,
                 },
             )
             return self._with_run_status(response)
@@ -111,11 +121,12 @@ class IngestionService:
             artifact_locator=url,
         )
         self._archive_artifact(source_id, "parsed.txt", content)
+        extraction_counters = self._run_extraction(source_id)
         self._record_run(
             source_id=source_id,
             status="completed",
             stage="ledger_write",
-            counters={"evidence_spans": text_spans + table_spans},
+            counters={"evidence_spans": text_spans + table_spans, **extraction_counters},
         )
         return self._response_for(source_id)
 
@@ -152,11 +163,16 @@ class IngestionService:
             parsed=parsed,
             artifact_locator=filename,
         )
+        extraction_counters = self._run_extraction(source_id)
         self._record_run(
             source_id=source_id,
             status="completed",
             stage="ledger_write",
-            counters={"text_spans": text_spans, "table_spans": table_spans},
+            counters={
+                "text_spans": text_spans,
+                "table_spans": table_spans,
+                **extraction_counters,
+            },
         )
         return self._response_for(source_id)
 
@@ -185,6 +201,16 @@ class IngestionService:
             stage="parse",
             error=error,
         )
+
+    def _run_extraction(self, source_id: str) -> dict[str, int]:
+        """Auto-linking stage; extraction failures never fail the ingest."""
+        if self.extraction_service is None:
+            return {}
+        try:
+            return self.extraction_service.process_source(source_id)
+        except Exception:
+            logger.exception("Extraction failed for %s; spans are still ingested", source_id)
+            return {}
 
     def _record_run(
         self,
