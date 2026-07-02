@@ -5,6 +5,9 @@ import hashlib
 import io
 import json
 import re
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
@@ -50,14 +53,33 @@ EFFECT_DIRECTIONS = {"increase", "decrease", "no_change", "mixed", "unknown"}
 
 
 class DuckDBLedgerRepository:
+    """DuckDB evidence ledger.
+
+    Concurrency contract: DuckDB is effectively single-writer, and concurrent
+    request threads sharing this repository used to race on writes
+    (`TransactionContext Error: Conflict on update!`). Every connection is
+    therefore taken through `_connect()`, which serializes access behind one
+    process-level lock; migration + dictionary seeding run once per instance.
+    """
+
+    _db_lock = threading.RLock()
+
     def __init__(self, db_path: Path, *, migrations_dir: Path | None = None) -> None:
         self.db_path = db_path
         self.migrations_dir = migrations_dir or Path(__file__).resolve().parent / "migrations"
         self.evidence_factory = EvidenceSpanFactory()
+        self._migrated = False
+
+    @contextmanager
+    def _connect(self) -> Iterator[duckdb.DuckDBPyConnection]:
+        with self._db_lock, duckdb.connect(str(self.db_path)) as connection:
+            yield connection
 
     def migrate(self) -> None:
+        if self._migrated:
+            return
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             for migration_path in sorted(self.migrations_dir.glob("*.sql")):
                 connection.execute(migration_path.read_text(encoding="utf-8"))
             self._ensure_column(connection, "sources", "document_type", "TEXT DEFAULT 'report'")
@@ -66,6 +88,7 @@ class DuckDBLedgerRepository:
             self._ensure_column(connection, "effect_claims", "material_name", "TEXT")
             self._ensure_column(connection, "effect_claims", "regime_summary", "TEXT")
             load_dictionaries(connection)
+        self._migrated = True
 
     def seed_synthetic_fixture(self, sample_dir: Path) -> EvidenceLedgerPacket:
         self.migrate()
@@ -77,7 +100,7 @@ class DuckDBLedgerRepository:
         raw_sha256 = hashlib.sha256(report_bytes + csv_bytes).hexdigest()
         rows = self._parse_csv_rows(csv_bytes)
 
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             try:
                 connection.execute("BEGIN")
                 self._delete_source_records(connection, source_id)
@@ -128,7 +151,7 @@ class DuckDBLedgerRepository:
         document_type = self._document_type_from_filename(filename)
         warnings: list[str] = []
 
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             try:
                 connection.execute("BEGIN")
                 self._delete_source_records(connection, source_id)
@@ -195,7 +218,7 @@ class DuckDBLedgerRepository:
         self.migrate()
         text_spans = 0
         table_spans = 0
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             try:
                 connection.execute("BEGIN")
                 self._delete_source_records(connection, source_id)
@@ -274,7 +297,7 @@ class DuckDBLedgerRepository:
         counters: dict[str, int] | None = None,
     ) -> None:
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             connection.execute(
                 """
                 INSERT INTO ingestion_runs (run_id, source_id, status, stage, error, counters_json)
@@ -299,7 +322,7 @@ class DuckDBLedgerRepository:
         self.migrate()
         where_clause = "WHERE source_id = ?" if source_id else ""
         params: list[str] = [source_id] if source_id else []
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             rows = connection.execute(
                 f"""
                 SELECT run_id, source_id, status, stage, error, counters_json, created_at
@@ -325,7 +348,7 @@ class DuckDBLedgerRepository:
     def latest_run_statuses(self) -> dict[str, str]:
         """Map source_id -> most recent ingestion run status."""
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             rows = connection.execute(
                 """
                 SELECT source_id, status
@@ -347,7 +370,7 @@ class DuckDBLedgerRepository:
         key = canonical_key(mention)
         type_clause = "AND e.entity_type = ?" if entity_type else ""
         type_params = [entity_type] if entity_type else []
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             row = connection.execute(
                 f"""
                 SELECT e.entity_id FROM entities e
@@ -372,7 +395,7 @@ class DuckDBLedgerRepository:
 
     def get_entity(self, entity_id: str) -> dict[str, Any] | None:
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             row = connection.execute(
                 """
                 SELECT entity_id, entity_type, canonical_key, canonical_name, description,
@@ -415,7 +438,7 @@ class DuckDBLedgerRepository:
         validation_status: str = "extracted",
     ) -> None:
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             connection.execute(
                 """
                 INSERT INTO entities (entity_id, entity_type, canonical_key, canonical_name,
@@ -453,7 +476,7 @@ class DuckDBLedgerRepository:
     ) -> None:
         """Append unseen evidence spans (and optionally a learned alias) to an entity."""
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             row = connection.execute(
                 "SELECT evidence_span_ids_json FROM entities WHERE entity_id = ?",
                 [entity_id],
@@ -490,7 +513,7 @@ class DuckDBLedgerRepository:
         """Idempotent relation write; evidence spans are unioned on conflict."""
         self.migrate()
         relation_id = "rel_" + stable_hash([src_entity_id, relation_type, dst_entity_id], 20)
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             row = connection.execute(
                 "SELECT evidence_span_ids_json FROM relations WHERE relation_id = ?",
                 [relation_id],
@@ -533,7 +556,7 @@ class DuckDBLedgerRepository:
         status: str = "extracted",
     ) -> None:
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             connection.execute(
                 """
                 INSERT INTO extraction_claims (claim_id, source_id, span_id, payload_json,
@@ -558,7 +581,7 @@ class DuckDBLedgerRepository:
         """Exact key, alias, then substring search over entities."""
         self.migrate()
         key = canonical_key(query)
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             rows = connection.execute(
                 """
                 SELECT DISTINCT e.entity_id, e.entity_type, e.canonical_name,
@@ -600,7 +623,7 @@ class DuckDBLedgerRepository:
         verification: dict[str, Any],
     ) -> None:
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             connection.execute(
                 """
                 INSERT INTO answer_runs (run_id, question, filters_json, packet_stats_json,
@@ -625,7 +648,7 @@ class DuckDBLedgerRepository:
 
     def get_answer_run(self, run_id: str) -> dict[str, Any] | None:
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             row = connection.execute(
                 """
                 SELECT run_id, question, filters_json, packet_stats_json, model_id,
@@ -651,7 +674,7 @@ class DuckDBLedgerRepository:
         self, *, run_id: str, question_id: str, metrics: dict[str, Any]
     ) -> None:
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             connection.execute(
                 "INSERT INTO eval_results (run_id, question_id, metrics_json) VALUES (?, ?, ?)",
                 [run_id, question_id, json.dumps(metrics, ensure_ascii=False, sort_keys=True)],
@@ -660,7 +683,7 @@ class DuckDBLedgerRepository:
     def latest_eval_summary(self) -> dict[str, Any] | None:
         """Aggregate metrics of the most recent eval run, or None if never stored."""
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             run_row = connection.execute(
                 "SELECT run_id, MAX(created_at) FROM eval_results GROUP BY run_id "
                 "ORDER BY MAX(created_at) DESC LIMIT 1"
@@ -694,7 +717,7 @@ class DuckDBLedgerRepository:
     def list_alias_index(self) -> list[tuple[str, str, str]]:
         """(alias_norm, entity_type, alias) triples for rule-based mention scanning."""
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             rows = connection.execute(
                 """
                 SELECT a.alias_norm, e.entity_type, a.alias
@@ -706,7 +729,7 @@ class DuckDBLedgerRepository:
 
     def list_graph_entities(self) -> list[dict[str, Any]]:
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             rows = connection.execute(
                 """
                 SELECT entity_id, entity_type, canonical_name, evidence_span_ids_json
@@ -725,7 +748,7 @@ class DuckDBLedgerRepository:
 
     def list_graph_relations(self) -> list[dict[str, Any]]:
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             rows = connection.execute(
                 """
                 SELECT relation_id, src_entity_id, relation_type, dst_entity_id,
@@ -747,7 +770,7 @@ class DuckDBLedgerRepository:
 
     def load_demo_packet(self) -> EvidenceLedgerPacket:
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             source_rows = connection.execute(
                 """
                 SELECT source_id, title
@@ -859,7 +882,7 @@ class DuckDBLedgerRepository:
 
     def list_sources(self) -> list[SourceSummary]:
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             rows = connection.execute(
                 """
                 SELECT
@@ -899,7 +922,7 @@ class DuckDBLedgerRepository:
 
     def get_source(self, source_id: str) -> SourceSummary | None:
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             row = connection.execute(
                 """
                 SELECT
@@ -931,7 +954,7 @@ class DuckDBLedgerRepository:
 
     def delete_source(self, source_id: str) -> bool:
         self.migrate()
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             source = self._find_source(connection, source_id)
             if source is None:
                 return False
@@ -948,7 +971,7 @@ class DuckDBLedgerRepository:
         self.migrate()
         where_clause = "WHERE source_id = ?" if source_id else ""
         params: list[str] = [source_id] if source_id else []
-        with duckdb.connect(str(self.db_path)) as connection:
+        with self._connect() as connection:
             rows = connection.execute(
                 f"""
                 SELECT

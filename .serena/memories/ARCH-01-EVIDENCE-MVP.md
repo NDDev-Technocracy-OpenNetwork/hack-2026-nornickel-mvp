@@ -1,6 +1,6 @@
 <!-- Memory Metadata
-Last updated: 2026-07-02
-Last commit: 1bca77f Merge pull request #6 from rldyourmnd/feat/w0-alignment-and-seams
+Last updated: 2026-07-03
+Last commit: f4bf404 Merge pull request #11 from rldyourmnd/feat/w5-corpus-eval-hardening
 Scope: apps/web/; services/api/; src/nornikel_kg/; docker-compose.yml; .github/workflows/ci.yml; pyproject.toml; .serena/newproj/nornikel-kg-search/; README.md
 Area: ARCH
 -->
@@ -9,71 +9,128 @@ Area: ARCH
 
 ## Purpose
 
-Capture the P0 architecture contract for the evidence-first materials research workbench.
+Capture the current architecture contract for the evidence-first materials research workbench
+after waves W0-W5.
 
 ## Source Of Truth
 
-- `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md`: implementation source of truth for scaffold decisions.
-- `.serena/newproj/nornikel-kg-search/16_MVP_BLUEPRINT.md`: MVP loop, modules, and build order.
-- `.serena/newproj/nornikel-kg-search/04_ADRS.md`: accepted decisions and deferred migrations.
-- `.serena/newproj/nornikel-kg-search/05_TECH_STACK.md`: current technology choices; the "LLM And Embeddings" defaults section was amended 2026-07-02 (commit `d5e61fa`) to open-weight-only models, withdrawing the earlier `openai/gpt-5.5-mini` / `openai/text-embedding-3-large` defaults.
-- `.serena/newproj/nornikel-kg-search/19_OWNER_DECISIONS.md`: approved implementation/deployment decisions, amended 2026-07-02 to defer to `.serena/plans/01_MVP_SCOPE_AND_DECISIONS.md` on LLM/embeddings choices.
+- `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md`: original scaffold decisions.
+- `.serena/plans/00_PLAN_INDEX.md` and `.serena/plans/03_IMPLEMENTATION_PLAN.md`: the W0-W5
+  implementation plan this architecture now realizes.
+- `src/nornikel_kg/ports/`: port protocols (`ledger.py`, `llm.py`, `parser.py`, `retrieval.py`,
+  `extraction.py`).
+- `src/nornikel_kg/adapters/`: concrete adapters per port.
+- `src/nornikel_kg/services/`: application services (orchestration only, no vendor imports
+  outside adapters).
 
 ## Entry Points
 
-- `src/nornikel_kg/services/qa_service.py`: deterministic evidence-backed QA assembly and claim verification.
-- `src/nornikel_kg/services/runtime.py`: runtime factory that seeds and loads the DuckDB ledger.
-- `src/nornikel_kg/ports/ledger.py`: evidence ledger port boundary.
-- `src/nornikel_kg/adapters/duckdb/repositories.py`: DuckDB repository for seeded and uploaded evidence sources; `migrate()` also seeds the graph dictionaries (see `mem:DATA-01-EVIDENCE-LEDGER`).
-- `src/nornikel_kg/ports/llm.py`: `LLMPort` protocol (`generate_json(task, system_prompt, user_prompt, json_schema, trace_id, tags)` returning `LLMResult`), plus the `LLMError`/`LLMInvalidResponseError`/`LLMBudgetExceededError` hierarchy.
-- `src/nornikel_kg/adapters/llm/__init__.py`: `build_llm(settings=None)` factory; returns `FakeLLM` unless `LLMSettings.llm_enabled` is true, in which case it lazily imports and returns `LiteLLMGateway`.
-- `src/nornikel_kg/adapters/llm/gateway.py`: `LiteLLMGateway` — the only module in the repository allowed to `import litellm`; runs guided `json_schema` completions at `temperature=0` with a request timeout, bounded retries, a `threading.BoundedSemaphore` concurrency cap, a `TokenBudget` hard stop, and optional Langfuse success/failure callbacks when `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` are set.
-- `src/nornikel_kg/adapters/llm/fake.py`: `FakeLLM` — deterministic canned/queued JSON responses for CI, tests, and the offline demo path.
-- `src/nornikel_kg/adapters/llm/settings.py`: `LLMSettings` (pydantic-settings) reads the LLM/embedding/Langfuse env matrix.
-- `apps/web/src/`: React/Vite workbench organized by app/pages/widgets/features/entities/shared.
-- `services/api/`: thin FastAPI route layer.
+- `src/nornikel_kg/services/qa_service.py`: `DemoQAService` — deterministic evidence selection,
+  optional retrieval augmentation (`_augment_with_retrieval`), optional LLM answer composition,
+  claim verification, and answer-run recording.
+- `src/nornikel_kg/services/ingestion_service.py`: `IngestionService` — routes `.csv/.md/.txt`
+  through `repository.ingest_source_bytes`, `.pdf/.docx` through the `DocumentParserPort`
+  (lazy-loaded `DoclingDocumentParser`), and URLs through the `UrlFetcherPort` (lazy-loaded
+  `TrafilaturaUrlFetcher`); records an `ingestion_runs` row for every ingest attempt with
+  `status` in `{running, completed, quarantined}` and archives the raw artifact bytes under
+  `ARTIFACT_ROOT/sources/<source_id>/` (best-effort, never blocks ingest).
+- `src/nornikel_kg/services/extraction_service.py`: `ExtractionService` — span -> mentions
+  (dictionary alias-scan always; GLiNER when `GLINER_ENABLED`; LLM guided JSON when
+  `LLMSettings.llm_enabled`) -> `EntityResolutionService` -> co-occurrence relations with span
+  provenance. Extraction failures are logged and swallowed; they never fail ingestion.
+- `src/nornikel_kg/services/entity_resolution.py`: `EntityResolutionService.resolve_or_create` —
+  canonical-key exact match -> alias match -> create; never merges across `entity_type`; an
+  embedding-fallback stage (cosine >= 0.90 against a Qdrant `entities` collection) is documented
+  in the class docstring but not implemented or called (`mem:TECHDEBT-01-NOW`).
+- `src/nornikel_kg/services/graph_service.py`: `GraphService` — builds a NetworkX `MultiDiGraph`
+  on demand from `list_graph_entities()`/`list_graph_relations()`; `neighborhood(entity_id,
+  depth=1..2, limit)` returns focus node plus evidence-ranked neighbors.
+- `src/nornikel_kg/services/retrieval_service.py`: `RetrievalService` — indexes evidence spans
+  and dictionary-seeded entities into Qdrant collections (`evidence_units` via
+  `QDRANT_COLLECTION` env, `entities`); `retrieve_span_ids` hybrid-searches then rejoins hits
+  against DuckDB and re-filters by `security_label`, so the index is never authoritative. Any
+  index/network failure degrades to an empty result, never an exception.
+- `src/nornikel_kg/services/answer_composer.py`: `LLMAnswerComposer.compose` — strict JSON
+  sentences citing `span_id`s from the packet; drops unsupported sentences, allows one
+  regeneration, falls back to the deterministic summary on repeated failure or when no evidence
+  exists.
+- `src/nornikel_kg/domain/analysis.py`: `ConflictDetector` (contradictory_direction,
+  method_mismatch, numeric_disagreement > 15% under the same method, grouped by
+  material+property+regime bucket) and `GapAnalyzer` (material x regime x property coverage
+  over dictionary-seeded entities only).
+- `src/nornikel_kg/adapters/llm/gateway.py`: `LiteLLMGateway` — the only module allowed to
+  `import litellm`; enforced by `tests/unit/test_llm_gateway.py::test_litellm_imported_only_inside_llm_adapter`.
+- `apps/web/src/`: React/Vite workbench; new widgets `widgets/graph-view` (force-graph
+  neighborhood, `react-force-graph-2d@1.29`), `widgets/gaps-board` (coverage matrix,
+  clickable cells), `widgets/timeline` (decisions/conclusions timeline).
+- `services/api/`: thin FastAPI route layer (`routes/sources.py`, `routes/entities.py`,
+  `routes/graph.py`, `routes/gaps.py`, `routes/evals.py`, `routes/query.py`).
 
 ## Current Behavior
 
-P0 scaffold uses React 19/Vite 8/TypeScript for the workbench, FastAPI for the API, Python 3.12 for backend/scientific code, and DuckDB as the current evidence ledger. Runtime seeds the synthetic fixture and can ingest CSV/Markdown sources through `/sources/upload`; source lifecycle also supports `DELETE /sources/{source_id}` and safe evidence listing at `/sources/{source_id}/evidence`.
+P0 scaffold uses React 19/Vite 8/TypeScript, FastAPI, Python 3.12, and DuckDB as the evidence
+ledger and graph store of record. Runtime wiring (`src/nornikel_kg/services/runtime.py`) lazily
+builds every service behind `@lru_cache` singletons:
+`get_ledger_repository`, `get_qa_service` (attaches `LLMAnswerComposer` only when
+`LLMSettings.llm_enabled`), `get_retrieval_service` (`EMBEDDING_BACKEND=off|local|fake`, `off`
+is the default and returns `index=None`), `get_ingestion_service` (wires extraction + retrieval
+into every ingest), `get_extraction_service` (`GLINER_ENABLED` default `true`), and
+`get_graph_service`.
 
-Wave W0 added an `LLMPort`/adapter seam behind `build_llm()`: `LLM_ENABLED=false` (the default, and the CI/test invariant) returns `FakeLLM` and never imports `litellm`; `tests/unit/test_llm_gateway.py::test_litellm_imported_only_inside_llm_adapter` scans `src/nornikel_kg` and fails if any file outside `adapters/llm` imports `litellm`. `pyproject.toml` adds a `[[tool.mypy.overrides]]` entry that sets `ignore_missing_imports = true` and `follow_imports = "skip"` for `litellm`/`langfuse`, since those packages are not part of the strict-mypy dependency closure otherwise. Neither `build_llm()`/`LiteLLMGateway` nor the new dictionary-loader `resolve_alias()` is called by any ingestion or QA service yet — they exist as tested, unwired seams.
-
-Upload hardening is split across FastAPI validation and the web Nginx proxy limit so production uploads receive structured API errors instead of proxy-level body-size failures.
-
-Qdrant is present in Compose and dependency configuration but is not yet used by the QA runtime. NetworkX, Docling/OCR, and embedding calls are P1 adapter wiring paths. Neo4j, PostgreSQL, queues, and object storage remain deferred migrations.
+Docling, GLiNER, sentence-transformers, and fastembed are imported lazily inside their adapter
+modules (never at import time), so the core API/tests do not require the `ingest` optional
+dependency group unless those code paths execute. `docling`/`trafilatura` are `importorskip`-
+guarded in `tests/integration/test_synthetic_v2_corpus.py` and skip when not installed.
 
 ## Contracts And Data
 
-Implemented ports: `EvidenceLedgerPort` (source listing, evidence listing, source upload, source deletion, evidence packet loading) and `LLMPort` (`generate_json` for `extraction`/`answer` tasks, implemented by `LiteLLMGateway` and `FakeLLM`).
+Implemented ports: `EvidenceLedgerPort`, `LLMPort`, `DocumentParserPort`/`UrlFetcherPort`
+(`ports/parser.py`), `EmbeddingBackendPort`/`VectorIndexPort` (`ports/retrieval.py`), and
+`MentionExtractorPort` (`ports/extraction.py`). `ports/parser.py` defines `ParserError` /
+`NoTextLayerError` (quarantine path, never OCR), `ParsedBlock`/`ParsedTableCell`/
+`ParsedTableRow`/`ParsedTable`/`ParsedDocument` (provenance-carrying), and `FetchedPage`.
 
-Workbench now renders user-configured filter controls that serialize typed `AskFilters` into
-`/qa/ask`.
-Workbench also renders clickable `follow_up_queries` when QA returns no exact material match,
-allowing the user to rerun a corrected query without accepting unrelated evidence.
+`ports/retrieval.py` defines `SparseVector`, `IndexableUnit`, `RetrievalHit`,
+`EmbeddingBackendPort.embed_dense`/`embed_sparse`, and `VectorIndexPort.index_units`/
+`hybrid_search`/`delete_source_units`. `QdrantVectorIndex` (`adapters/qdrant_index/index.py`)
+creates named `dense`+`sparse` vectors (`Modifier.IDF` on sparse), fuses with
+`FusionQuery(fusion=Fusion.RRF)`, filters on `security_label`/`source_id` payload fields, and
+derives point IDs via `uuid5(NAMESPACE_URL, unit_id)`.
 
-Planned ports remain: `DocumentParserPort`, `ArtifactStorePort`, `MetadataStorePort`, `VectorIndexPort`, `GraphStorePort`, `EmbeddingModelPort`, `SparseEncoderPort`, `SecurityLabelPolicyPort`, and `EvaluationStorePort`. `LLMExtractorPort` from the original plan is superseded by the generic `LLMPort`, which already covers both the extraction and answer tasks through the `task` argument.
+`domain/extraction.py` defines `ENTITY_TYPES` (material, regime, property, equipment, team,
+person, laboratory, conclusion, decision, value), `RELATION_TYPES` (MADE_OF, APPLIES_REGIME,
+HAS_MEASUREMENT, OF_PROPERTY, PRODUCED_EFFECT, USED_EQUIPMENT, PERFORMED_BY, AUTHORED_BY,
+SUPPORTED_BY, FROM_DOCUMENT, DERIVED_FROM, CONTRADICTS, CONCLUDES), `EntityMention`,
+`ExtractedRelation`, `ExtractionPayload`, and `EXTRACTION_JSON_SCHEMA` for guided-JSON LLM
+extraction. Co-occurrence relations wired in `ExtractionService`: material->USED_EQUIPMENT
+(equipment), material->PERFORMED_BY (team), material->HAS_MEASUREMENT (property),
+material->APPLIES_REGIME (regime), material->CONCLUDES (decision/conclusion).
 
-Concrete P0 domain services should not be hidden behind generic RAG abstractions: `EvidenceSpanFactory`, `TableEvidenceBuilder`, `MaterialNormalizer`, `RegimeNormalizer`, `MeasurementNormalizer`, `ConflictDetector`, `GapAnalyzer`, `AnswerAssembler`, and `ClaimVerifier`.
+Concrete P0 domain services (not hidden behind generic RAG abstractions): `EvidenceSpanFactory`,
+`MaterialNormalizer`/`RegimeNormalizer`/`MeasurementNormalizer` equivalents in
+`domain/normalization.py`, `ConflictDetector`, `GapAnalyzer`, `ClaimVerifier`, and
+`DemoQAService` as the answer assembler.
 
 ## Invariants
 
 - Domain logic depends on ports, not vendor clients.
 - React must call FastAPI contracts and must not bypass application services.
-- If DuckDB and Qdrant disagree, DuckDB wins.
-- Do not add Neo4j or PostgreSQL before the documented scale triggers become real.
-- Only `src/nornikel_kg/adapters/llm/gateway.py` may `import litellm`; enforced by `tests/unit/test_llm_gateway.py::test_litellm_imported_only_inside_llm_adapter`.
-- `README.md` documents the live stand as `https://nornikel.nddev.asia`, with `https://fa.nddev.asia` as an interim mirror; `docs/deployment/fa-nddev.md` was not updated in this wave and still describes only the `fa.nddev.asia` server-only Compose override (see `mem:TECHDEBT-01-NOW` for the resulting doc drift).
+- If DuckDB and Qdrant disagree, DuckDB wins; Qdrant hits are always rejoined and re-filtered
+  against DuckDB before being trusted.
+- Only `src/nornikel_kg/adapters/llm/gateway.py` may `import litellm`.
+- Extraction and answer-composer system prompts explicitly instruct the model that fragment
+  text is data, not instructions (see `mem:SEC-01-ACL-AND-PROMPT-INJECTION`).
+- Parser/network/extraction/retrieval failures degrade gracefully (quarantine, empty result,
+  rule-only fallback) and never surface as an unhandled 500 or an unverified answer.
 
 ## Change Rules
 
-Keep implementation changes aligned with `18_IMPLEMENTATION_SPEC.md` first, then update ADRs if a stack boundary changes.
+Keep implementation changes aligned with `.serena/plans/03_IMPLEMENTATION_PLAN.md` first, then
+update ADRs if a stack boundary changes.
 
 ## Verification
 
-- `git diff --check`: formatting gate for planning docs.
-- `make ci`: backend/frontend scaffold gate (`uv run ruff check .`, `uv run mypy`, `uv run pytest` — 53 tests pass at `1bca77f` — plus frontend typecheck/build).
-- `make eval`: deterministic evidence packet verification.
-- `docker compose config`: validates server-first Compose wiring.
-- Browser validation: ignored `browser/ledger-fixed-*.png` and `browser/ledger-fixed-*.yaml`
-  artifacts prove the desktop query/upload flow and mobile layout; do not commit them.
+- `make ci`: backend/frontend gate (`uv run ruff check .`, `uv run mypy`,
+  `uv run pytest` — 89 passed, 3 skipped at `f4bf404` — plus frontend typecheck/build).
+- `make eval`: deterministic + retrieval-augmented evidence packet verification (12 questions).
+- `docker compose config`: validates server-first Compose wiring (`api`, `web`, `qdrant`).
