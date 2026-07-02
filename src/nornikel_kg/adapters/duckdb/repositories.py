@@ -69,11 +69,21 @@ class DuckDBLedgerRepository:
         self.migrations_dir = migrations_dir or Path(__file__).resolve().parent / "migrations"
         self.evidence_factory = EvidenceSpanFactory()
         self._migrated = False
+        self._connection: duckdb.DuckDBPyConnection | None = None
 
     @contextmanager
     def _connect(self) -> Iterator[duckdb.DuckDBPyConnection]:
-        with self._db_lock, duckdb.connect(str(self.db_path)) as connection:
-            yield connection
+        """One persistent write connection, serialized by the process lock.
+
+        Opening DuckDB per operation costs tens of milliseconds of file
+        locking; under enrichment threads that turned into hours of queueing
+        (verified with py-spy). The single connection lives for the process;
+        crash recovery relies on DuckDB's WAL.
+        """
+        with self._db_lock:
+            if self._connection is None:
+                self._connection = duckdb.connect(str(self.db_path))
+            yield self._connection
 
     def migrate(self) -> None:
         if self._migrated:
