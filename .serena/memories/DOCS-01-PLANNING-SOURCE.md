@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: f4bf404 Merge pull request #11 from rldyourmnd/feat/w5-corpus-eval-hardening
+Last commit: 86abb1f Merge fix/real-corpus-ingest: real-corpus ingest hardening
 Scope: README.md; .serena/newproj/nornikel-kg-search/; .serena/plans/; .serena/reviews/; .env.example; docs/deployment/
 Area: DOCS
 -->
@@ -23,6 +23,8 @@ Capture how to use and maintain the planning package now that waves W0-W5 are im
   gaps/conflicts, graph UI).
 - `.serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md`: deployment/observability plan, realized
   by `docs/deployment/nornikel-nddev.md`.
+- `.serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md`: 2026-07-03 full-track requirement brief
+  and gap analysis (G1-G10) against the real `DATA_HACK/` corpus, with revised waves W6-W8.
 - `.serena/reviews/01_PLAN_CRITICAL_REVIEW.md` and `.serena/reviews/02_RESEARCH_EVIDENCE_REGISTER.md`:
   plan self-critique and source-backed research facts.
 - `README.md`: current implementation status; documents "Implemented beyond the P0 scaffold
@@ -59,6 +61,24 @@ should be read as "the plan that produced this state," not as a live status docu
 `LLM_ANSWER_MODEL`, `EMBEDDING_BACKEND`, `EMBEDDING_MODEL_ID=deepvk/USER-bge-m3`,
 `SPARSE_MODEL_ID=Qdrant/bm25`, `HF_HOME`, `LANGFUSE_*`, `OLLAMA_BASE_URL`,
 `MAX_SOURCE_UPLOAD_BYTES`); `LLM_ENABLED=false` remains the default and the CI/test invariant.
+
+`.serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md` (2026-07-03, `02b2f88`) records the full
+track brief «Научный клубок» (organizer owner-message) and the real case corpus reality check:
+`DATA_HACK/Источники информации/` (~4.9 GB, gitignored via `4da4538`) holds 879 conference-paper
+files (1.7G), 394 journal files (2.6G, e.g. «Цветные металлы», «Горный журнал»), 104 review
+files (274M), 60 article files (181M), and 16 presentation files (98M) — 1163 PDF, 115 DOCX,
+79 ZIP, 46 XLS, 18 DOC, 16 RAR, 5 PPTX spanning pyrometallurgy/slag, electrowinning, desalination,
+beneficiation, and geomechanics domains. It ranks ten requirement gaps (G1 ontology breadth —
+missing Publication/Expert/Facility entity types and `described_in`/`validated_by` relations; G2
+numeric constraint/range queries; G3 geography+time filters; G4 corpus-scale ingestion; G5
+verification-model surfacing; G6 literature-review answer mode; G7 RBAC/audit; G8
+recommendations; G9 export/notifications; G10 performance target) and lays out revised waves
+W6-W8 before 2026-07-16. A live test of a real 816KB Gipronikel DOCX (278 evidence spans) found
+unbounded per-span LLM extraction blocking `/sources/upload` for over 5 minutes behind the
+bundled web proxy's 300s timeout; the fix (commit `f62f17c`, deployed to the live stand via
+`git archive` — independently verified present at `/srv/nornikel-kg-search` with no `.git`
+directory) is now merged into local `main` via `86abb1f` — see `mem:TECHDEBT-01-NOW` for the
+still-pending `origin/main` push.
 
 ## Contracts And Data
 

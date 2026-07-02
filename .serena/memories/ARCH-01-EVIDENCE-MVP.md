@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: ece33d3 docs(plans): record completed dataeyes discovery and configured dev model
+Last commit: 86abb1f Merge fix/real-corpus-ingest: real-corpus ingest hardening
 Scope: apps/web/; services/api/; src/nornikel_kg/; docker-compose.yml; .github/workflows/ci.yml; pyproject.toml; .serena/newproj/nornikel-kg-search/; README.md
 Area: ARCH
 -->
@@ -37,7 +37,16 @@ after waves W0-W5.
 - `src/nornikel_kg/services/extraction_service.py`: `ExtractionService` — span -> mentions
   (dictionary alias-scan always; GLiNER when `GLINER_ENABLED`; LLM guided JSON when
   `LLMSettings.llm_enabled`) -> `EntityResolutionService` -> co-occurrence relations with span
-  provenance. Extraction failures are logged and swallowed; they never fail ingestion.
+  provenance. Extraction failures are logged and swallowed; they never fail ingestion. As of `86abb1f`
+  (merge of `fix/real-corpus-ingest`), `ExtractionService` caps LLM calls at
+  `MAX_LLM_SPANS_PER_SOURCE = 12` per source, truncates span text to `MAX_SPAN_CHARS = 1200`
+  before extraction, and only calls the LLM for spans longer than 80 characters; ingestion no
+  longer blocks the HTTP request on extraction — `IngestionService._schedule_enrichment` runs
+  extraction+indexing either inline or on a daemon thread depending on
+  `IngestionService.synchronous_enrichment` (`SYNC_ENRICHMENT` env, default `false`), so
+  `POST /sources/upload` for parsed documents can return with run `status="running"`,
+  `stage="extraction"` while enrichment completes in the background. See
+  `mem:TECHDEBT-01-NOW` for the pending `origin/main` push.
 - `src/nornikel_kg/services/entity_resolution.py`: `EntityResolutionService.resolve_or_create` —
   canonical-key exact match -> alias match -> create; never merges across `entity_type`; an
   embedding-fallback stage (cosine >= 0.90 against a Qdrant `entities` collection) is documented

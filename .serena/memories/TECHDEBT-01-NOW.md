@@ -1,7 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: ece33d3 docs(plans): record completed dataeyes discovery and configured dev model
-Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; .env.example; .github/workflows/ci.yml; tests/; .serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md
+Last commit: 86abb1f Merge fix/real-corpus-ingest: real-corpus ingest hardening
+Scope: src/nornikel_kg/; apps/web/; services/api/; pyproject.toml; docker-compose.yml; .env.example; .github/workflows/ci.yml; tests/; .serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md; .serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md
 Area: TECHDEBT
 -->
 
@@ -55,6 +55,16 @@ Capture verified current gaps after waves W0-W5, without using memory as a backl
   the prompt text, with one reminder-regeneration attempt on a `ValidationError` before the
   deterministic fallback (see `mem:ARCH-01-EVIDENCE-MVP`). This closes the previously-recorded
   "LLM key blocked" gap; see the new proprietary-model gap below for what remains open.
+- **Real-corpus LLM extraction/ingestion hardening**: resolved via `86abb1f` (merge of
+  `fix/real-corpus-ingest`, commit `f62f17c`). `ExtractionService.MAX_LLM_SPANS_PER_SOURCE = 12`
+  caps LLM calls per source, `MAX_SPAN_CHARS = 1200` truncates span text before extraction, and
+  only spans longer than 80 characters are LLM-eligible; `IngestionService._schedule_enrichment`
+  runs extraction+indexing inline or on a daemon thread per
+  `IngestionService.synchronous_enrichment` (`SYNC_ENRICHMENT` env, default `false`), so parsed-
+  document ingest can return with run `status="running"`/`stage="extraction"` while enrichment
+  finishes in the background. Motivated by a live test: a real 816KB Gipronikel DOCX (278
+  evidence spans, gitignored `DATA_HACK/` corpus) previously blocked `/sources/upload` for over
+  5 minutes behind the bundled web proxy's `proxy_read_timeout 300s`.
 
 ## Entry Points
 
@@ -135,3 +145,21 @@ change.
   future change — do not assume they run today.
 - FastAPI tests still emit a Starlette deprecation warning that `fastapi.testclient` uses
   `httpx` and may need `httpx2` in a future dependency cycle (unchanged from W0).
+- **GitHub push backlog (network outage)**: local `main` is at `86abb1f` (merge of
+  `fix/real-corpus-ingest`) and ahead of `origin/main` by 2 commits (`f62f17c`, `86abb1f`;
+  verified via `git rev-list --left-right --count origin/main...main` -> `0	2`) because GitHub
+  pushes keep timing out (multiple retries observed on 2026-07-03), though `git ls-remote origin
+  main` (read-only) still succeeds. The `fix/real-corpus-ingest` branch has been merged and
+  deleted locally; the live stand already runs equivalent code (deployed earlier via `git
+  archive`, independently verified: `/srv/nornikel-kg-search/src/nornikel_kg/services/
+  extraction_service.py` has `MAX_LLM_SPANS_PER_SOURCE = 12`, no `.git` directory there). Push
+  `main` to `origin/main` as soon as GitHub connectivity recovers; until then, `origin/main` is
+  stale relative to the local/stand state.
+- **Dictionary/ontology coverage does not extend to the real corpus domains**: the dictionaries
+  under `src/nornikel_kg/resources/dictionaries/` only seed Ni-Cu/Cu-Ni/Ni-Cr-Mo alloys and their
+  regimes/properties (see `mem:DATA-01-EVIDENCE-LEDGER`, `Contracts And Data`), so
+  slag/matte pyrometallurgy, electrowinning, desalination, beneficiation, and geomechanics
+  questions against the real `DATA_HACK/` corpus slot-parse to no entities (live finding,
+  2026-07-03). Tracked as gap G1 in `.serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md`
+  (dictionary/ontology extension plus new Publication/Expert/Facility entity types, planned for
+  wave W6.3).

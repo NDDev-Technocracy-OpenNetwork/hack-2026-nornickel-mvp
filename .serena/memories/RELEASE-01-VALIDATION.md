@@ -1,7 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: ece33d3 docs(plans): record completed dataeyes discovery and configured dev model
-Scope: Makefile; .github/workflows/ci.yml; docker-compose.yml; docs/deployment/nornikel-nddev.md; pyproject.toml; services/api/Dockerfile; apps/web/nginx.conf; .env.example; apps/web/; services/api/; .serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md
+Last commit: 86abb1f Merge fix/real-corpus-ingest: real-corpus ingest hardening
+Scope: Makefile; .github/workflows/ci.yml; docker-compose.yml; docs/deployment/nornikel-nddev.md; pyproject.toml; services/api/Dockerfile; apps/web/nginx.conf; .env.example; apps/web/; services/api/; .serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md; .serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md
 Area: RELEASE
 -->
 
@@ -113,3 +113,11 @@ reverse proxy limit/timeout.
   proprietary dev model (`openai/gpt-5.4-mini`) must be swapped for a verified open-weight
   catalog model (`deepseek-v3.2-251201` per the same discovery) before the submission freeze —
   see `mem:TECHDEBT-01-NOW`.
+- On 2026-07-03 the live stand received the real-corpus ingestion fix (`fix/real-corpus-ingest`,
+  commit `f62f17c`) via `git archive` ahead of any merge — independently verified over SSH: `cd
+  /srv/nornikel-kg-search && git rev-parse HEAD` returns `fatal: not a git repository`, while
+  `extraction_service.py`/`runtime.py` on the server match the `f62f17c` diff
+  (`MAX_LLM_SPANS_PER_SOURCE = 12`, `SYNC_ENRICHMENT` env). `f62f17c` is now merged into local
+  `main` via `86abb1f`, so the stand's deployed code and `main` HEAD agree; the only remaining gap
+  is that `86abb1f` has not reached `origin/main` yet (GitHub push retries were still failing as
+  of this sync) — see `mem:TECHDEBT-01-NOW`.

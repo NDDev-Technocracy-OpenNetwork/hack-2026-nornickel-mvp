@@ -1,7 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: ece33d3 docs(plans): record completed dataeyes discovery and configured dev model
-Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml; .env.example; pyproject.toml; .serena/plans/; .serena/reviews/; docs/deployment/
+Last commit: 86abb1f Merge fix/real-corpus-ingest: real-corpus ingest hardening
+Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml; .env.example; pyproject.toml; .serena/plans/; .serena/reviews/; docs/deployment/; .gitignore
 Area: CORE
 -->
 
@@ -25,6 +25,7 @@ Index the durable project knowledge for the Nornikel Materials KG Search hackath
 - `docs/deployment/nornikel-nddev.md`: primary live-stand deployment contract (W5).
 - `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md`: primary scaffold contract for P0 implementation.
 - `.serena/plans/00_PLAN_INDEX.md`: 2026-07-02 MVP implementation plan package (waves W0-W5), now fully implemented per this memory set.
+- `.serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md`: 2026-07-03 full-track requirement brief («Научный клубок»), gap analysis G1-G10 against the real `DATA_HACK/` corpus, and revised waves W6-W8 (see `mem:DOCS-01-PLANNING-SOURCE`).
 - `.serena/reviews/`: tracked plan critical review and research evidence register.
 
 ## Entry Points
@@ -76,6 +77,17 @@ Merge commits `edfa173` (PR#13, LLM gateway `_strictify` strict-mode fix) and `7
 answer-composer/extraction-service inline JSON-format hints and one-retry validation) hardened
 the LLM gateway/composer path after `f4bf404`; `.serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md`
 records the completed `dataeyes.ai` key discovery (`ece33d3`, see `mem:TECHDEBT-01-NOW`).
+
+2026-07-03 (`02b2f88`, `4da4538`, `86abb1f`): `.serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md`
+records the full track brief and a gap analysis (G1-G10) against the real case corpus
+`DATA_HACK/` (~4.9 GB, gitignored via `4da4538`, never committed). A live test against a real
+816KB Gipronikel DOCX (278 evidence spans) found unbounded per-span LLM extraction blocking
+`/sources/upload` behind the 300s proxy timeout; the fix (`fix/real-corpus-ingest`, commit
+`f62f17c`) caps LLM extraction and backgrounds enrichment, and is now merged into `main` via
+`86abb1f` (verified: `MAX_LLM_SPANS_PER_SOURCE`/`SYNC_ENRICHMENT` are present in
+`src/nornikel_kg/services/extraction_service.py`/`runtime.py` at `main` HEAD). The push of
+`86abb1f` to `origin/main` is still pending a GitHub network recovery — see
+`mem:TECHDEBT-01-NOW`.
 
 ## Contracts And Data
 

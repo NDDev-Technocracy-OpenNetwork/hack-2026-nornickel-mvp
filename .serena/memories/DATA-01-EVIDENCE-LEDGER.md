@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: ece33d3 docs(plans): record completed dataeyes discovery and configured dev model
+Last commit: 86abb1f Merge fix/real-corpus-ingest: real-corpus ingest hardening
 Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/; src/nornikel_kg/resources/dictionaries/; src/nornikel_kg/services/; sample_docs/; eval/
 Area: DATA
 -->
@@ -128,6 +128,16 @@ consistency, offline CSV/Markdown ingestion with conflict and alias assertions
 `pytest.importorskip` (`test_docx_corpus_ingests_with_docling`,
 `test_scan_pdf_quarantines_with_docling`, `test_html_fixture_extracts_via_trafilatura_offline`)
 that skip when those optional packages are absent.
+
+## Real-Corpus Live Test (2026-07-03)
+
+A real 816KB Gipronikel DOCX (slag-depletion article, from the gitignored `DATA_HACK/` corpus —
+see `.serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md`) parsed into 278 `text`/`table_row`
+evidence spans through the same `DoclingDocumentParser` -> `ingest_parsed_document` path described
+above; this is the first ledger-scale datapoint from outside the 17-source synthetic corpus. The
+dictionaries in `src/nornikel_kg/resources/dictionaries/` (Ni-Cu/Cu-Ni/Ni-Cr-Mo alloys only, per
+`Contracts And Data` below) do not cover this document's slag/matte pyrometallurgy domain, so
+dictionary-based extraction found no entities for it — see `mem:TECHDEBT-01-NOW` (gap G1).
 
 ## Contracts And Data
 
