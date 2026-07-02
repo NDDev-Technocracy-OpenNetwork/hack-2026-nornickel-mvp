@@ -77,6 +77,11 @@ python_version = "3.12"
 strict = true
 packages = ["nornikel_kg", "services.api"]
 
+[[tool.mypy.overrides]]
+module = ["litellm", "litellm.*", "langfuse", "langfuse.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
