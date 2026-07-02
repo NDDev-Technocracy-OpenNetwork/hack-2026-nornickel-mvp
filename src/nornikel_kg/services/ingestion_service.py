@@ -28,6 +28,11 @@ class ExtractionServiceProtocol(Protocol):
         """Extract entities/relations from a source's spans."""
 
 
+class IndexingServiceProtocol(Protocol):
+    def index_source(self, source_id: str) -> int:
+        """Index a source's spans into the vector store."""
+
+
 class IngestionService:
     """Orchestrates source ingestion: parse -> ledger writes -> run lifecycle.
 
@@ -43,12 +48,14 @@ class IngestionService:
         url_fetcher: UrlFetcherPort | None = None,
         artifact_root: Path | None = None,
         extraction_service: ExtractionServiceProtocol | None = None,
+        retrieval_service: IndexingServiceProtocol | None = None,
     ) -> None:
         self.repository = repository
         self._parser = parser
         self._url_fetcher = url_fetcher
         self.artifact_root = artifact_root
         self.extraction_service = extraction_service
+        self.retrieval_service = retrieval_service
 
     @property
     def parser(self) -> DocumentParserPort:
@@ -204,13 +211,15 @@ class IngestionService:
 
     def _run_extraction(self, source_id: str) -> dict[str, int]:
         """Auto-linking stage; extraction failures never fail the ingest."""
-        if self.extraction_service is None:
-            return {}
-        try:
-            return self.extraction_service.process_source(source_id)
-        except Exception:
-            logger.exception("Extraction failed for %s; spans are still ingested", source_id)
-            return {}
+        counters: dict[str, int] = {}
+        if self.extraction_service is not None:
+            try:
+                counters.update(self.extraction_service.process_source(source_id))
+            except Exception:
+                logger.exception("Extraction failed for %s; spans are still ingested", source_id)
+        if self.retrieval_service is not None:
+            counters["indexed_units"] = self.retrieval_service.index_source(source_id)
+        return counters
 
     def _record_run(
         self,

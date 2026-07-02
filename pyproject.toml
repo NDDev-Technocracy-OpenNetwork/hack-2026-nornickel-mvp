@@ -91,6 +91,10 @@ module = [
   "gliner.*",
   "networkx",
   "networkx.*",
+  "sentence_transformers",
+  "sentence_transformers.*",
+  "fastembed",
+  "fastembed.*",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"

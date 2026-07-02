@@ -1,4 +1,4 @@
-.PHONY: install test lint typecheck api web demo eval generate-fixtures docker-up docker-down ci
+.PHONY: install test lint typecheck api web demo eval generate-fixtures docker-up docker-down ci reindex warmup
 
 install:
 	uv sync --group dev
@@ -26,6 +26,12 @@ generate-fixtures:
 
 eval:
 	uv run python scripts/run_eval.py
+
+reindex:
+	uv run python scripts/reindex.py
+
+warmup:
+	uv run python scripts/warmup.py
 
 docker-up:
 	docker compose up --build

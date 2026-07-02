@@ -7,10 +7,12 @@ from threading import Lock
 
 from nornikel_kg.adapters.duckdb.repositories import DuckDBLedgerRepository
 from nornikel_kg.adapters.llm import LLMSettings, build_llm
+from nornikel_kg.services.answer_composer import LLMAnswerComposer
 from nornikel_kg.services.extraction_service import ExtractionService
 from nornikel_kg.services.graph_service import GraphService
 from nornikel_kg.services.ingestion_service import IngestionService
 from nornikel_kg.services.qa_service import DemoQAService
+from nornikel_kg.services.retrieval_service import RetrievalService
 
 _repository_build_lock = Lock()
 
@@ -46,7 +48,35 @@ def get_ledger_repository() -> DuckDBLedgerRepository:
 
 @lru_cache
 def get_qa_service() -> DemoQAService:
-    return DemoQAService(ledger_repository=get_ledger_repository())
+    settings = LLMSettings()
+    composer = LLMAnswerComposer(build_llm(settings)) if settings.llm_enabled else None
+    repository = get_ledger_repository()
+    return DemoQAService(
+        ledger_repository=repository,
+        retrieval_service=get_retrieval_service(),
+        answer_composer=composer,
+        run_recorder=repository,
+    )
+
+
+@lru_cache
+def get_retrieval_service() -> RetrievalService:
+    backend_kind = os.getenv("EMBEDDING_BACKEND", "off").lower()
+    index = None
+    if backend_kind in {"local", "fake"}:
+        from nornikel_kg.adapters.qdrant_index import QdrantVectorIndex
+
+        if backend_kind == "local":
+            from nornikel_kg.adapters.embeddings import LocalEmbeddingBackend
+
+            embeddings: object = LocalEmbeddingBackend()
+        else:
+            from nornikel_kg.adapters.embeddings import FakeEmbeddingBackend
+
+            embeddings = FakeEmbeddingBackend()
+        qdrant_url = os.getenv("QDRANT_URL", "http://qdrant:6333")
+        index = QdrantVectorIndex(qdrant_url, embeddings)  # type: ignore[arg-type]
+    return RetrievalService(get_ledger_repository(), index)
 
 
 @lru_cache
@@ -56,6 +86,7 @@ def get_ingestion_service() -> IngestionService:
         get_ledger_repository(),
         artifact_root=artifact_root,
         extraction_service=get_extraction_service(),
+        retrieval_service=get_retrieval_service(),
     )
 
 
