@@ -10,6 +10,7 @@ from typing import Any, cast
 
 import duckdb
 from nornikel_kg.adapters.duckdb.dictionary_loader import load_dictionaries
+from nornikel_kg.domain.analysis import ConflictDetector
 from nornikel_kg.domain.evidence import EvidenceSpanFactory
 from nornikel_kg.domain.ids import claim_id, fact_id, source_id_from_bytes, stable_hash
 from nornikel_kg.domain.ledger import EvidenceLedgerPacket
@@ -646,6 +647,50 @@ class DuckDBLedgerRepository:
             "created_at": str(row[7]),
         }
 
+    def store_eval_result(
+        self, *, run_id: str, question_id: str, metrics: dict[str, Any]
+    ) -> None:
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            connection.execute(
+                "INSERT INTO eval_results (run_id, question_id, metrics_json) VALUES (?, ?, ?)",
+                [run_id, question_id, json.dumps(metrics, ensure_ascii=False, sort_keys=True)],
+            )
+
+    def latest_eval_summary(self) -> dict[str, Any] | None:
+        """Aggregate metrics of the most recent eval run, or None if never stored."""
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            run_row = connection.execute(
+                "SELECT run_id, MAX(created_at) FROM eval_results GROUP BY run_id "
+                "ORDER BY MAX(created_at) DESC LIMIT 1"
+            ).fetchone()
+            if run_row is None:
+                return None
+            run_id = str(run_row[0])
+            rows = connection.execute(
+                "SELECT question_id, metrics_json FROM eval_results WHERE run_id = ?",
+                [run_id],
+            ).fetchall()
+        per_question = {str(row[0]): json.loads(str(row[1])) for row in rows}
+        aggregate: dict[str, float] = {}
+        counts: dict[str, int] = {}
+        for metrics in per_question.values():
+            for name, value in metrics.items():
+                if isinstance(value, int | float):
+                    aggregate[name] = aggregate.get(name, 0.0) + float(value)
+                    counts[name] = counts.get(name, 0) + 1
+        averaged = {
+            name: (total / counts[name] if counts[name] else 0.0)
+            for name, total in aggregate.items()
+        }
+        return {
+            "run_id": run_id,
+            "run_at": str(run_row[1]),
+            "question_count": len(per_question),
+            "metrics": averaged,
+        }
+
     def list_alias_index(self) -> list[tuple[str, str, str]]:
         """(alias_norm, entity_type, alias) triples for rule-based mention scanning."""
         self.migrate()
@@ -804,7 +849,10 @@ class DuckDBLedgerRepository:
             effects=effects,
             experiments=experiments,
             source_titles=source_titles,
-            conflicts=self._build_conflicts(evidence),
+            conflicts=[
+                *self._build_conflicts(evidence),
+                *ConflictDetector().detect(experiments),
+            ],
             gaps=self._build_gaps(evidence, experiments),
         )
 

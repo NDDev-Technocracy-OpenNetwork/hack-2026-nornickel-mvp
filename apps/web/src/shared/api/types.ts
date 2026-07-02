@@ -88,3 +88,58 @@ export type AskRequest = {
   include_gaps?: boolean;
   filters?: AskFilters;
 };
+
+export type GraphNode = {
+  entity_id: string;
+  entity_type: string;
+  label: string;
+  evidence_count: number;
+};
+
+export type GraphEdge = {
+  relation_id: string;
+  source: string;
+  target: string;
+  relation_type: string;
+  evidence_count: number;
+};
+
+export type GraphNeighborhood = {
+  focus_entity_id: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+};
+
+export type EntitySearchResult = {
+  entity_id: string;
+  entity_type: string;
+  canonical_name: string;
+};
+
+export type GapCell = {
+  material_id: string;
+  material_name: string;
+  regime_type: string;
+  regime_name: string;
+  property_id: string;
+  property_name: string;
+  covered: boolean;
+  experiment_ids: string[];
+};
+
+export type GapsAnalysis = {
+  materials: string[];
+  regimes: string[];
+  properties: string[];
+  cells: GapCell[];
+  gap_count: number;
+  covered_count: number;
+};
+
+export type TimelineEvent = {
+  entity_id: string;
+  entity_type: string;
+  title: string;
+  date: string | null;
+  evidence_span_ids: string[];
+};

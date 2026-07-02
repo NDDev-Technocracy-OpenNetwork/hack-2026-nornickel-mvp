@@ -3,9 +3,36 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query, status
 
 from nornikel_kg.domain.models import AskRequest
-from nornikel_kg.services.runtime import get_graph_service, get_qa_service
+from nornikel_kg.services.runtime import (
+    get_graph_service,
+    get_ledger_repository,
+    get_qa_service,
+)
 
 router = APIRouter(prefix="/graph", tags=["graph"])
+
+
+@router.get("/timeline")
+def timeline() -> dict[str, list[dict[str, object]]]:
+    entities = get_ledger_repository().list_graph_entities()
+    events: list[dict[str, object]] = []
+    for entity in entities:
+        if entity["entity_type"] not in {"decision", "conclusion"}:
+            continue
+        card = get_ledger_repository().get_entity(entity["entity_id"])
+        if card is None:
+            continue
+        events.append(
+            {
+                "entity_id": card["entity_id"],
+                "entity_type": card["entity_type"],
+                "title": card["canonical_name"],
+                "date": card["metadata"].get("date"),
+                "evidence_span_ids": card["evidence_span_ids"],
+            }
+        )
+    events.sort(key=lambda event: str(event.get("date") or ""), reverse=True)
+    return {"events": events}
 
 
 @router.get("/neighborhood")
