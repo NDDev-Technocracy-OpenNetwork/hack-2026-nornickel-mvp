@@ -4,6 +4,14 @@ Date: 2026-06-28
 
 This file records owner decisions that close the pre-implementation questions and override earlier planning assumptions where they conflict.
 
+> **Amendment (2026-07-02).** The track organizers clarified hackathon rules after this
+> file was written: proprietary LLM APIs (OpenAI, Anthropic) are forbidden; only
+> open-weight models usable from Russia are allowed. The "LLM And Embeddings" section
+> below is superseded by `.serena/plans/01_MVP_SCOPE_AND_DECISIONS.md` (locked owner
+> decisions, 2026-07-02): provider `dataeyes.ai` via the LiteLLM SDK, open-weight
+> catalog models only, local `deepvk/USER-bge-m3` embeddings, optional Ollama fallback,
+> self-hosted Langfuse observability. On any conflict, `.serena/plans/01` wins.
+
 ## Git And Delivery
 
 - Implementation is approved.

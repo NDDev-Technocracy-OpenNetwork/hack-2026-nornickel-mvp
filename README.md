@@ -24,7 +24,16 @@ This repository now contains a working scaffold for the MVP:
 
 Planning and architecture documents live in `.serena/newproj/nornikel-kg-search/`.
 The current implementation contract is `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md`.
-Owner decisions are recorded in `.serena/newproj/nornikel-kg-search/19_OWNER_DECISIONS.md`.
+Owner decisions are recorded in `.serena/newproj/nornikel-kg-search/19_OWNER_DECISIONS.md`,
+amended by the MVP plan package `.serena/plans/00_PLAN_INDEX.md` (2026-07-02, waves W0–W5).
+
+Hackathon LLM rules: proprietary LLM APIs (OpenAI/Anthropic) are forbidden. The system
+uses only open-weight models (dataeyes.ai router via the LiteLLM SDK, optional Ollama
+fallback), local `deepvk/USER-bge-m3` embeddings, and self-hosted Langfuse
+observability. `LLM_ENABLED=false` keeps every pipeline deterministic and offline —
+this is the default for CI and the demo safety net.
+
+Live stand: `https://nornikel.nddev.asia` (interim mirror: `https://fa.nddev.asia`).
 
 ## Quick Start
 
@@ -110,8 +119,9 @@ P0 keeps the system modular but intentionally simple:
 - Qdrant is present in Compose and dependency configuration, but runtime retrieval is not wired yet.
 - Graph paths are returned deterministically from the ledger; NetworkX remains a later
   graph-neighborhood adapter.
-- LiteLLM/OpenAI-compatible providers are prepared through environment variables, but extraction
-  and answer writing are deterministic in P0.
+- LLM access goes through a single LiteLLM SDK gateway adapter (`adapters/llm/`), restricted
+  to open-weight models per hackathon rules; `LLM_ENABLED=false` (default) swaps in a
+  deterministic FakeLLM so extraction and answer writing stay offline-testable.
 - Docling/OCR ingestion is a P1 adapter path; current ingestion supports fixture seeding plus
   CSV/Markdown uploads.
 
