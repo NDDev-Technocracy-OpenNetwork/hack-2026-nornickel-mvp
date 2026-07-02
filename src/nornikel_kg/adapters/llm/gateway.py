@@ -17,6 +17,26 @@ from nornikel_kg.ports.llm import (
 logger = logging.getLogger(__name__)
 
 
+def _strictify(schema: dict[str, Any]) -> dict[str, Any]:
+    """Recursively add additionalProperties=false to objects.
+
+    OpenAI-compatible strict json_schema mode rejects object schemas without
+    it; other providers ignore the field.
+    """
+    result = dict(schema)
+    if result.get("type") == "object":
+        result.setdefault("additionalProperties", False)
+        properties = result.get("properties")
+        if isinstance(properties, dict):
+            result["properties"] = {
+                name: _strictify(value) if isinstance(value, dict) else value
+                for name, value in properties.items()
+            }
+    if result.get("type") == "array" and isinstance(result.get("items"), dict):
+        result["items"] = _strictify(result["items"])
+    return result
+
+
 class TokenBudget:
     """Process-wide hard stop: once spent, every further LLM call raises."""
 
@@ -74,6 +94,7 @@ class LiteLLMGateway:
         import litellm
 
         model = self.settings.model_for(task)
+        json_schema = _strictify(json_schema)
         started = time.perf_counter()
         with self._semaphore:
             response = litellm.completion(
