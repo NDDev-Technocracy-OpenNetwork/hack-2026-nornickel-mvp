@@ -50,3 +50,4 @@ qdrant_storage/
 .serena/.flow_sync_marker
 .serena/.locks/
 .serena/.state/
+DATA_HACK/
