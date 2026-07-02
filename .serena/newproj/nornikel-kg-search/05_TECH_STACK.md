@@ -119,14 +119,19 @@ Keep providers configurable through `.env` and never commit real keys:
 - embedding model;
 - reranker.
 
-P0 defaults:
+P0 defaults (amended 2026-07-02 per hackathon rules — open-weight models only, see
+`.serena/plans/01_MVP_SCOPE_AND_DECISIONS.md`; the previous `openai/gpt-5.5-mini` /
+`openai/text-embedding-3-large` defaults are withdrawn):
 
-- `LLM_PROVIDER=litellm`;
-- `LLM_MODEL=openai/gpt-5.5-mini` as an owner-provided LiteLLM model alias;
-- `EMBEDDING_PROVIDER=litellm`;
-- `EMBEDDING_MODEL=openai/text-embedding-3-large` or another OpenAI-compatible embedding model;
-- `LITELLM_API_BASE` optional for a proxy or OpenAI-compatible gateway;
-- `OPENAI_API_KEY` or provider-specific key supplied only through server secrets.
+- `LLM_ENABLED=false` in CI/tests (deterministic FakeLLM path), `true` on the server;
+- `DATAEYES_API_BASE` + `DATAEYES_API_KEY` — OpenAI-compatible router restricted to
+  open-weight catalog models (DeepSeek/Qwen/GLM/Kimi class, weights verified on HF);
+- `LLM_EXTRACTION_MODEL` / `LLM_ANSWER_MODEL` — LiteLLM strings chosen in W0 discovery;
+- `EMBEDDING_BACKEND=local` with `EMBEDDING_MODEL_ID=deepvk/USER-bge-m3` (dense) and
+  `SPARSE_MODEL_ID=Qdrant/bm25` (fastembed);
+- `OLLAMA_BASE_URL` — optional self-hosted fallback (`ollama_chat/qwen3:4b|8b`);
+- keys supplied only through server secrets; full matrix in
+  `.serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md`.
 
 Hard requirements:
 

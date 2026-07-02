@@ -34,18 +34,21 @@ Required configuration groups:
 
 Secrets must live outside the repository.
 
-P0 `.env.example` should include placeholders only:
+P0 `.env.example` should include placeholders only (amended 2026-07-02 — open-weight
+matrix from `.serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md`; OpenAI defaults
+withdrawn per hackathon rules):
 
-- `OPENAI_API_KEY`;
-- `LITELLM_API_BASE`;
-- `LLM_PROVIDER=litellm`;
-- `LLM_MODEL=openai/gpt-5.5-mini`;
-- `EMBEDDING_PROVIDER=litellm`;
-- `EMBEDDING_MODEL=openai/text-embedding-3-large`;
+- `LLM_ENABLED=false` (CI/tests) / `true` (server);
+- `DATAEYES_API_BASE=https://api.dataeyes.ai/v1`, `DATAEYES_API_KEY`;
+- `LLM_EXTRACTION_MODEL`, `LLM_ANSWER_MODEL` (open-weight IDs chosen in W0);
+- `EMBEDDING_BACKEND=local`, `EMBEDDING_MODEL_ID=deepvk/USER-bge-m3`,
+  `SPARSE_MODEL_ID=Qdrant/bm25`, `HF_HOME=/app/data/hf-cache`;
+- `OLLAMA_BASE_URL=http://ollama:11434` (fallback profile);
+- `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`;
 - `QDRANT_URL=http://qdrant:6333`;
 - `DUCKDB_PATH=data/catalog.duckdb`;
 - `ARTIFACT_ROOT=data/artifacts`;
-- `APP_BASE_URL=https://fa.nddev.asia`.
+- `APP_BASE_URL=https://nornikel.nddev.asia`.
 
 ## Jobs
 

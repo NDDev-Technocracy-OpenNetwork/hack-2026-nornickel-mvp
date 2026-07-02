@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import duckdb
+from nornikel_kg.adapters.duckdb.dictionary_loader import load_dictionaries
 from nornikel_kg.domain.evidence import EvidenceSpanFactory
 from nornikel_kg.domain.ids import claim_id, fact_id, source_id_from_bytes
 from nornikel_kg.domain.ledger import EvidenceLedgerPacket
@@ -60,6 +61,7 @@ class DuckDBLedgerRepository:
             self._ensure_column(connection, "effect_claims", "source_id", "TEXT")
             self._ensure_column(connection, "effect_claims", "material_name", "TEXT")
             self._ensure_column(connection, "effect_claims", "regime_summary", "TEXT")
+            load_dictionaries(connection)
 
     def seed_synthetic_fixture(self, sample_dir: Path) -> EvidenceLedgerPacket:
         self.migrate()
