@@ -1,7 +1,7 @@
 <!-- Memory Metadata
-Last updated: 2026-06-29
-Last commit: ad88521 test: expand exact material query regression coverage
-Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml
+Last updated: 2026-07-02
+Last commit: 1964e87 docs: sync instruction docs with MVP plan and LLM constraints
+Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml; .serena/plans/; .serena/reviews/
 Area: CORE
 -->
 
@@ -26,6 +26,8 @@ Index the durable project knowledge for the Nornikel Materials KG Search hackath
 - `.serena/newproj/nornikel-kg-search/19_OWNER_DECISIONS.md`: closed owner decisions for implementation, deployment, data, LLM, security, and UX.
 - `.serena/newproj/nornikel-kg-search/16_MVP_BLUEPRINT.md`: product loop and MVP module boundaries.
 - `.serena/newproj/nornikel-kg-search/11_PROJECT_STRUCTURE.md`: planned scaffold layout after owner approval.
+- `.serena/plans/00_PLAN_INDEX.md`: 2026-07-02 MVP implementation plan package (waves W0-W5); `.serena/plans/01_MVP_SCOPE_AND_DECISIONS.md` supersedes `19_OWNER_DECISIONS.md` on conflict (open-weight-only LLM policy, dataeyes.ai provider, Langfuse observability, new-server rollout, ~2026-07-16 deadline).
+- `.serena/reviews/`: tracked plan critical review and research evidence register (other review outputs stay gitignored).
 
 ## Entry Points
 
