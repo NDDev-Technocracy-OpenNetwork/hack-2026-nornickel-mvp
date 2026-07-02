@@ -71,7 +71,26 @@ curl -sS $DATAEYES_API_BASE/embeddings -d '{"model":"<emb?>","input":"тест"}
 Record results (catalog table, latency, RU quality notes, json_schema support) in
 this file under "Discovery Results" and pick model IDs.
 
-### Discovery Results (2026-07-02, partial — key invalid)
+### Discovery Results (2026-07-03, working key — COMPLETE)
+
+- The second owner key works against `https://platform.dataeyes.ai/v1`. Catalog:
+  **180 models** (GPT-4/5.x, DeepSeek v3/v4, Qwen 3.5–3.7, GLM 4.7–5.2, Kimi K2.x,
+  MiniMax, embeddings `text-embedding-3-*`).
+- RU guided-JSON smoke (temperature 0): `gpt-5.4-mini` — 2 s, clean JSON (needs
+  `additionalProperties:false`, handled by gateway `_strictify`); `deepseek-v3.2-251201`
+  — 7 s, clean RU JSON, **best open-weight candidate** (weights on HF);
+  `qwen3.5-27b` — returned array (schema not enforced); `glm-4.7` — 18 s / 834
+  completion tokens (thinking); `Moonshot-Kimi-K2-Instruct` — requires "json" in
+  messages. Providers do NOT reliably enforce `json_schema` → prompts carry the
+  format inline and invalid payloads get one reminder regeneration.
+- **Configured (owner decision, dev): `openai/gpt-5.4-mini`** for extraction and
+  answers; `LLM_ENABLED=true` on the stand since 2026-07-03. Proprietary-model
+  caveat below still applies — switch to `deepseek-v3.2-251201` (verified open
+  weights) before demo freeze.
+- Embeddings stay local (`deepvk/USER-bge-m3`); catalog embeddings are
+  OpenAI-proprietary and irrelevant.
+
+### Prior attempt (2026-07-02, partial — first key invalid)
 
 - Correct LLM base URL is `https://platform.dataeyes.ai/v1` (unified global endpoint,
   Bearer auth). `https://api.dataeyes.ai` is a separate Search & Reader product with
