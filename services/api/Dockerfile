@@ -1,19 +1,29 @@
 FROM python:3.12-slim
 
+COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /uvx /bin/
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PROJECT_ROOT=/app
+    PROJECT_ROOT=/app \
+    HF_HOME=/app/data/hf-cache \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
 
-COPY pyproject.toml README.md ./
+# Dependency layer: locked resolve without the project so code edits reuse the cache.
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-dev --extra ingest
+
+COPY README.md ./
 COPY src ./src
 COPY services ./services
 COPY eval ./eval
 COPY sample_docs ./sample_docs
 
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --extra ingest
 
 EXPOSE 8000
 
