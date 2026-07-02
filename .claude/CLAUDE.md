@@ -33,13 +33,18 @@ Owner workflow: rldyour plugins/skills.
 - Synthetic fixture path defaults to `sample_docs/synthetic`.
 
 ## Validation and deployment notes
-- Public deployment target and container path: `fa.nddev.asia`, compose services `api`, `web`, and `qdrant`.
+- Primary stand: `https://nornikel.nddev.asia` on `ssh curestry` (compose project
+  `/srv/nornikel-kg-search`; TLS via host nginx-proxy + acme-companion; Langfuse v3 in
+  `/srv/langfuse` reachable over the external `lf-net` network). Deploy contract:
+  `docs/deployment/nornikel-nddev.md`. Interim mirror: `fa.nddev.asia`
+  (`docs/deployment/fa-nddev.md`).
 - Do not leave local runtime artifacts (temp DBs, browser artifacts, runtime markers).
-
-- Upload hardening contract: `POST /sources/upload` accepts `.csv`, `.md`, `.markdown`, `.txt`, `.text` with MIME checks
-  and `MAX_SOURCE_UPLOAD_BYTES` (default `5242880`) size limit.
-- The bundled web Nginx proxy sets `client_max_body_size 6m`; host-level Nginx for `fa.nddev.asia`
-  must keep an equal or larger body limit.
+- Upload hardening contract: `POST /sources/upload` accepts `.csv`, `.md`, `.markdown`,
+  `.txt`, `.text`, `.pdf`, `.docx` with MIME checks and `MAX_SOURCE_UPLOAD_BYTES`
+  (default `5242880`; `26214400` on the server) size limit; `POST /sources/import-url`
+  ingests online resources via trafilatura.
+- The bundled web Nginx proxy sets `client_max_body_size 6m` and 300s `/api/` proxy
+  timeouts; the per-vhost limit on the server is 30m.
 - Error details from API failures are surfaced to the UI through shared API client (`apps/web/src/shared/api/client.ts`).
 
 ## Known TODOs / P1

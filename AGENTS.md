@@ -90,8 +90,15 @@ Run repository-local validation scripts when present.
 
 ## Key Notes
 
-- MVP now is a fully grounded evidence-led flow with DuckDB ingestion and deterministic QA on synthetic source.
-- P1 remaining gaps: Qdrant retrieval hybridization, Docling parser pipeline, LiteLLM extraction/answer synthesis.
+- MVP (waves W0-W5 merged 2026-07-02/03) is a grounded evidence-led flow: Docling PDF/DOCX
+  ingest with quarantine, trafilatura URL import, dictionary/GLiNER/LLM extraction with
+  entity resolution, own DuckDB+NetworkX graph layer, Qdrant hybrid retrieval
+  (USER-bge-m3 + BM25, RRF), LLM answer synthesis gated by the claim verifier with a
+  deterministic fallback, conflict detector, gaps matrix, and `sample_docs/synthetic_v2/`
+  corpus (17 sources + manifest).
+- Remaining gaps: working dataeyes AI-Models key (W0.1 discovery blocked; `LLM_ENABLED=false`
+  everywhere until then), embedding fallback inside entity resolution, decisions-timeline
+  entities require dated extraction.
 - Implementation plan package (2026-07-02): `.serena/plans/00_PLAN_INDEX.md` (waves W0-W5)
   plus `.serena/reviews/` (critical review, research evidence register). Plans amend
   `18_IMPLEMENTATION_SPEC.md`; scope/decision precedence is `.serena/plans/01_MVP_SCOPE_AND_DECISIONS.md`.
