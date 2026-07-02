@@ -1,7 +1,8 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: 86abb1f Merge fix/real-corpus-ingest: real-corpus ingest hardening
-Scope: apps/web/; services/api/; src/nornikel_kg/; docker-compose.yml; .github/workflows/ci.yml; pyproject.toml; .serena/newproj/nornikel-kg-search/; README.md
+Last commit: 41ee7ac perf: skip co-occurrence edges on dense catalog-like spans
+Scope: apps/web/; services/api/; src/nornikel_kg/; docker-compose.yml; .github/workflows/ci.yml;
+  pyproject.toml; .serena/newproj/nornikel-kg-search/; README.md
 Area: ARCH
 -->
 
@@ -10,13 +11,11 @@ Area: ARCH
 ## Purpose
 
 Capture the current architecture contract for the evidence-first materials research workbench
-after waves W0-W5.
+after the real-corpus hardening wave.
 
 ## Source Of Truth
 
 - `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md`: original scaffold decisions.
-- `.serena/plans/00_PLAN_INDEX.md` and `.serena/plans/03_IMPLEMENTATION_PLAN.md`: the W0-W5
-  implementation plan this architecture now realizes.
 - `src/nornikel_kg/ports/`: port protocols (`ledger.py`, `llm.py`, `parser.py`, `retrieval.py`,
   `extraction.py`).
 - `src/nornikel_kg/adapters/`: concrete adapters per port.
@@ -26,107 +25,107 @@ after waves W0-W5.
 ## Entry Points
 
 - `src/nornikel_kg/services/qa_service.py`: `DemoQAService` — deterministic evidence selection,
-  optional retrieval augmentation (`_augment_with_retrieval`), optional LLM answer composition,
-  claim verification, and answer-run recording.
+  scoped filtering (`_apply_source_scope` for geography/year, `_apply_numeric_constraints` for
+  parsed numeric ranges via `_parse_numeric_constraints`), optional retrieval augmentation
+  (`_augment_with_retrieval`), optional LLM answer composition, claim verification, and
+  answer-run recording. `RunRecorderProtocol` requires both `record_answer_run` and
+  `source_metadata() -> dict[str, dict[str, Any]]` (`source_id -> {year, geography}`).
 - `src/nornikel_kg/services/ingestion_service.py`: `IngestionService` — routes `.csv/.md/.txt`
-  through `repository.ingest_source_bytes`, `.pdf/.docx` through the `DocumentParserPort`
-  (lazy-loaded `DoclingDocumentParser`), and URLs through the `UrlFetcherPort` (lazy-loaded
-  `TrafilaturaUrlFetcher`); records an `ingestion_runs` row for every ingest attempt with
-  `status` in `{running, completed, quarantined}` and archives the raw artifact bytes under
-  `ARTIFACT_ROOT/sources/<source_id>/` (best-effort, never blocks ingest).
+  through `repository.ingest_source_bytes`, `.pdf/.docx` through the `DocumentParserPort`, and
+  URLs through the `UrlFetcherPort`; after `ingest_parsed_document` it calls
+  `_apply_source_metadata(source_id, filename, parsed)` (year/geography heuristics: max
+  plausible 4-digit year in `filename + head text`; `ru` vs `foreign` geography from a
+  Cyrillic-vs-Latin character ratio over the first ~3000 chars of head text, only set when at
+  least 40 alphabetic characters are seen) before scheduling enrichment. `enrich_source
+  (source_id)` re-runs the extraction/enrichment stage for an already-parsed source
+  (recovery/re-enrichment path, exposed via `POST /sources/{id}/enrich`).
 - `src/nornikel_kg/services/extraction_service.py`: `ExtractionService` — span -> mentions
-  (dictionary alias-scan always; GLiNER when `GLINER_ENABLED`; LLM guided JSON when
-  `LLMSettings.llm_enabled`) -> `EntityResolutionService` -> co-occurrence relations with span
-  provenance. Extraction failures are logged and swallowed; they never fail ingestion. As of `86abb1f`
-  (merge of `fix/real-corpus-ingest`), `ExtractionService` caps LLM calls at
-  `MAX_LLM_SPANS_PER_SOURCE = 12` per source, truncates span text to `MAX_SPAN_CHARS = 1200`
-  before extraction, and only calls the LLM for spans longer than 80 characters; ingestion no
-  longer blocks the HTTP request on extraction — `IngestionService._schedule_enrichment` runs
-  extraction+indexing either inline or on a daemon thread depending on
-  `IngestionService.synchronous_enrichment` (`SYNC_ENRICHMENT` env, default `false`), so
-  `POST /sources/upload` for parsed documents can return with run `status="running"`,
-  `stage="extraction"` while enrichment completes in the background. See
-  `mem:TECHDEBT-01-NOW` for the pending `origin/main` push.
+  (dictionary alias-scan always; GLiNER when `GLINER_ENABLED`; LLM guided JSON only when both
+  `LLMSettings.llm_enabled` and `LLM_EXTRACTION_ENABLED` are set, see
+  `src/nornikel_kg/services/runtime.py:get_extraction_service`) -> `EntityResolutionService` ->
+  co-occurrence relations with span provenance. Guards for real-corpus scale:
+  `MAX_LLM_SPANS_PER_SOURCE = 12` (LLM calls per source), `MAX_SPAN_CHARS = 1200` (span text
+  truncation before extraction, LLM-eligible only above 80 chars), `MAX_CO_OCCURRENCE_ENTITIES =
+  12` (skips co-occurrence-edge generation for spans resolving more than 12 entities — dense
+  catalog/TOC/reference-list spans). `_alias_index()` caches `repository.list_alias_index()` per
+  service instance (fixes a full-table-scan-per-span quadratic cost). `process_source` also
+  calls `_link_publication(source_id, spans, mentioned_entity_ids)`, which creates one
+  `publication` entity per source (`resolve_or_create(mention=source.title[:120],
+  entity_type="publication", span_ids=<first 3 span ids>)`), links mentioned
+  `material`/`regime`/`property` entities to it via `DESCRIBED_IN`, and extracts author names
+  from the first 12 spans (up to 4000 chars) via `_extract_authors` (RU «Фамилия И.О.» /
+  EN "I.O. Surname" regexes, capped at 12 names), linking each as a `person` entity via
+  `AUTHORED_BY`. `publication`/`DESCRIBED_IN` are not present in `domain/extraction.py`'s
+  `ENTITY_TYPES`/`RELATION_TYPES` tuples (those only gate the LLM-guided JSON schema), so this
+  path never goes through LLM-schema validation — see `mem:TECHDEBT-01-NOW`.
 - `src/nornikel_kg/services/entity_resolution.py`: `EntityResolutionService.resolve_or_create` —
-  canonical-key exact match -> alias match -> create; never merges across `entity_type`; an
-  embedding-fallback stage (cosine >= 0.90 against a Qdrant `entities` collection) is documented
-  in the class docstring but not implemented or called (`mem:TECHDEBT-01-NOW`).
+  canonical-key exact match -> alias match -> create; never merges across `entity_type`; does not
+  validate `entity_type` against `domain/extraction.py`'s `ENTITY_TYPES`. An embedding-fallback
+  stage (cosine >= 0.90 against a Qdrant `entities` collection) is documented in the class
+  docstring but not implemented or called (`mem:TECHDEBT-01-NOW`).
 - `src/nornikel_kg/services/graph_service.py`: `GraphService` — builds a NetworkX `MultiDiGraph`
   on demand from `list_graph_entities()`/`list_graph_relations()`; `neighborhood(entity_id,
-  depth=1..2, limit)` returns focus node plus evidence-ranked neighbors.
+  depth=1..2, limit)` returns focus node plus evidence-ranked neighbors (no entity-type-aware
+  boost, so dense `material` nodes can crowd out `person`/`publication` nodes within the limit —
+  `mem:TECHDEBT-01-NOW`).
 - `src/nornikel_kg/services/retrieval_service.py`: `RetrievalService` — indexes evidence spans
-  and dictionary-seeded entities into Qdrant collections (`evidence_units` via
-  `QDRANT_COLLECTION` env, `entities`); `retrieve_span_ids` hybrid-searches then rejoins hits
-  against DuckDB and re-filters by `security_label`, so the index is never authoritative. Any
-  index/network failure degrades to an empty result, never an exception.
+  and dictionary-seeded entities into Qdrant collections (`evidence_units`, `entities`);
+  `retrieve_span_ids` hybrid-searches then rejoins hits against DuckDB and re-filters by
+  `security_label`; `reindex_all()` is now exposed via `POST /sources/reindex-all` on a
+  background daemon thread.
 - `src/nornikel_kg/services/answer_composer.py`: `LLMAnswerComposer.compose` — strict JSON
   sentences citing `span_id`s from the packet; drops unsupported sentences, allows one
   regeneration, falls back to the deterministic summary on repeated failure or when no evidence
-  exists. Because providers do not always enforce `response_format`/`json_schema`, the packet
-  prompt (`_packet_prompt`) also spells out the exact required structure
-  (`{"sentences": [{"sentence": ..., "supporting_span_ids": [...]}]}`) inline as text; a
-  `ValidationError` on attempt 1 sends one reminder-regeneration attempt before falling back on
-  attempt 2. `src/nornikel_kg/services/extraction_service.py`'s `_llm_mentions` adds the same
-  kind of inline format hint (entities/relations JSON shape) ahead of the fragment text for
-  extraction calls.
-- `src/nornikel_kg/domain/analysis.py`: `ConflictDetector` (contradictory_direction,
-  method_mismatch, numeric_disagreement > 15% under the same method, grouped by
-  material+property+regime bucket) and `GapAnalyzer` (material x regime x property coverage
-  over dictionary-seeded entities only).
+  exists.
+- `src/nornikel_kg/domain/analysis.py`: `ConflictDetector` and `GapAnalyzer` (material x regime
+  x property coverage over dictionary-seeded entities only).
 - `src/nornikel_kg/adapters/llm/gateway.py`: `LiteLLMGateway` — the only module allowed to
   `import litellm`; enforced by `tests/unit/test_llm_gateway.py::test_litellm_imported_only_inside_llm_adapter`.
-  `_strictify(schema)` recursively sets `additionalProperties: false` on every object schema (and
-  recurses into `array.items`) before every `generate_json` call, required for OpenAI-compatible
-  strict `json_schema` mode; covered by
-  `tests/unit/test_llm_gateway.py::test_strictify_adds_additional_properties`.
-- `apps/web/src/`: React/Vite workbench; new widgets `widgets/graph-view` (force-graph
-  neighborhood, `react-force-graph-2d@1.29`), `widgets/gaps-board` (coverage matrix,
-  clickable cells), `widgets/timeline` (decisions/conclusions timeline).
-- `services/api/`: thin FastAPI route layer (`routes/sources.py`, `routes/entities.py`,
-  `routes/graph.py`, `routes/gaps.py`, `routes/evals.py`, `routes/query.py`).
+- `apps/web/src/`: React/Vite workbench;
+  `widgets/analysis-workbench/ui/AnalysisWorkbench.tsx` now also has geography/year_from/
+  year_to filter inputs (`geographyFilter`/`yearFromFilter`/`yearToFilter` state, wired into
+  `AskFilters.geography`/`year_from`/`year_to`); `shared/api/types.ts`'s `AskFilters` type gained
+  `geography?: string[]`, `year_from?: number`, `year_to?: number`; `shared/api/client.ts`'s
+  `hasNonEmptyFilters` now handles scalar (non-array) filter values as well as arrays.
+- `services/api/`: thin FastAPI route layer; `routes/sources.py` gained
+  `POST /sources/{source_id}/enrich` and `POST /sources/reindex-all`.
 
 ## Current Behavior
 
 P0 scaffold uses React 19/Vite 8/TypeScript, FastAPI, Python 3.12, and DuckDB as the evidence
 ledger and graph store of record. Runtime wiring (`src/nornikel_kg/services/runtime.py`) lazily
-builds every service behind `@lru_cache` singletons:
-`get_ledger_repository`, `get_qa_service` (attaches `LLMAnswerComposer` only when
-`LLMSettings.llm_enabled`), `get_retrieval_service` (`EMBEDDING_BACKEND=off|local|fake`, `off`
-is the default and returns `index=None`), `get_ingestion_service` (wires extraction + retrieval
-into every ingest), `get_extraction_service` (`GLINER_ENABLED` default `true`), and
-`get_graph_service`.
+builds every service behind `@lru_cache` singletons: `get_ledger_repository`, `get_qa_service`
+(attaches `LLMAnswerComposer` only when `LLMSettings.llm_enabled`), `get_retrieval_service`
+(`EMBEDDING_BACKEND=off|local|fake`), `get_ingestion_service` (`SYNC_ENRICHMENT` env gates
+inline-vs-background enrichment), `get_extraction_service` (`GLINER_ENABLED` default `true`,
+`LLM_EXTRACTION_ENABLED` default `false` gates ingest-time LLM calls independently of
+`LLM_ENABLED`), and `get_graph_service`.
 
 Docling, GLiNER, sentence-transformers, and fastembed are imported lazily inside their adapter
 modules (never at import time), so the core API/tests do not require the `ingest` optional
-dependency group unless those code paths execute. `docling`/`trafilatura` are `importorskip`-
-guarded in `tests/integration/test_synthetic_v2_corpus.py` and skip when not installed.
+dependency group unless those code paths execute.
 
 ## Contracts And Data
 
-Implemented ports: `EvidenceLedgerPort`, `LLMPort`, `DocumentParserPort`/`UrlFetcherPort`
-(`ports/parser.py`), `EmbeddingBackendPort`/`VectorIndexPort` (`ports/retrieval.py`), and
-`MentionExtractorPort` (`ports/extraction.py`). `ports/parser.py` defines `ParserError` /
-`NoTextLayerError` (quarantine path, never OCR), `ParsedBlock`/`ParsedTableCell`/
-`ParsedTableRow`/`ParsedTable`/`ParsedDocument` (provenance-carrying), and `FetchedPage`.
-
-`ports/retrieval.py` defines `SparseVector`, `IndexableUnit`, `RetrievalHit`,
-`EmbeddingBackendPort.embed_dense`/`embed_sparse`, and `VectorIndexPort.index_units`/
-`hybrid_search`/`delete_source_units`. `QdrantVectorIndex` (`adapters/qdrant_index/index.py`)
-creates named `dense`+`sparse` vectors (`Modifier.IDF` on sparse), fuses with
-`FusionQuery(fusion=Fusion.RRF)`, filters on `security_label`/`source_id` payload fields, and
-derives point IDs via `uuid5(NAMESPACE_URL, unit_id)`.
+Implemented ports: `EvidenceLedgerPort`, `LLMPort`, `DocumentParserPort`/`UrlFetcherPort`,
+`EmbeddingBackendPort`/`VectorIndexPort`, and `MentionExtractorPort`.
 
 `domain/extraction.py` defines `ENTITY_TYPES` (material, regime, property, equipment, team,
-person, laboratory, conclusion, decision, value), `RELATION_TYPES` (MADE_OF, APPLIES_REGIME,
-HAS_MEASUREMENT, OF_PROPERTY, PRODUCED_EFFECT, USED_EQUIPMENT, PERFORMED_BY, AUTHORED_BY,
-SUPPORTED_BY, FROM_DOCUMENT, DERIVED_FROM, CONTRADICTS, CONCLUDES), `EntityMention`,
-`ExtractedRelation`, `ExtractionPayload`, and `EXTRACTION_JSON_SCHEMA` for guided-JSON LLM
-extraction. Co-occurrence relations wired in `ExtractionService`: material->USED_EQUIPMENT
-(equipment), material->PERFORMED_BY (team), material->HAS_MEASUREMENT (property),
-material->APPLIES_REGIME (regime), material->CONCLUDES (decision/conclusion).
+person, laboratory, conclusion, decision, value — note: `publication` is not in this tuple, see
+Entry Points above), `RELATION_TYPES` (MADE_OF, APPLIES_REGIME, HAS_MEASUREMENT, OF_PROPERTY,
+PRODUCED_EFFECT, USED_EQUIPMENT, PERFORMED_BY, AUTHORED_BY, SUPPORTED_BY, FROM_DOCUMENT,
+DERIVED_FROM, CONTRADICTS, CONCLUDES — note: `DESCRIBED_IN` is not in this tuple), and
+`EXTRACTION_JSON_SCHEMA` for guided-JSON LLM extraction. Co-occurrence relations wired in
+`ExtractionService`: material->USED_EQUIPMENT (equipment), material->PERFORMED_BY (team),
+material->HAS_MEASUREMENT (property), material->APPLIES_REGIME (regime),
+material->CONCLUDES (decision/conclusion); publication/author linking is a separate code path
+using entity_type `publication` and relation_type `DESCRIBED_IN`/`AUTHORED_BY` that bypasses
+those tuples entirely.
 
-Concrete P0 domain services (not hidden behind generic RAG abstractions): `EvidenceSpanFactory`,
-`MaterialNormalizer`/`RegimeNormalizer`/`MeasurementNormalizer` equivalents in
+`domain/models.py`'s `AskFilters` now carries `geography: list[str]` (default empty),
+`year_from: int | None`, `year_to: int | None`, alongside the existing filter fields.
+
+Concrete P0 domain services: `EvidenceSpanFactory`, normalization helpers in
 `domain/normalization.py`, `ConflictDetector`, `GapAnalyzer`, `ClaimVerifier`, and
 `DemoQAService` as the answer assembler.
 
@@ -139,17 +138,21 @@ Concrete P0 domain services (not hidden behind generic RAG abstractions): `Evide
 - Only `src/nornikel_kg/adapters/llm/gateway.py` may `import litellm`.
 - Extraction and answer-composer system prompts explicitly instruct the model that fragment
   text is data, not instructions (see `mem:SEC-01-ACL-AND-PROMPT-INJECTION`).
-- Parser/network/extraction/retrieval failures degrade gracefully (quarantine, empty result,
-  rule-only fallback) and never surface as an unhandled 500 or an unverified answer.
+- Parser/network/extraction/retrieval failures degrade gracefully and never surface as an
+  unhandled 500 or an unverified answer.
+- Do not call `duckdb.connect(...)` outside `DuckDBLedgerRepository._connect()` — the connection
+  is now persistent per repository instance behind a class `RLock`
+  (`mem:DATA-01-EVIDENCE-LEDGER`).
 
 ## Change Rules
 
-Keep implementation changes aligned with `.serena/plans/03_IMPLEMENTATION_PLAN.md` first, then
-update ADRs if a stack boundary changes.
+Keep implementation changes aligned with `.serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md`
+(current wave plan) first, then update ADRs if a stack boundary changes.
 
 ## Verification
 
-- `make ci`: backend/frontend gate (`uv run ruff check .`, `uv run mypy`,
-  `uv run pytest` — 90 passed, 3 skipped at `ece33d3` — plus frontend typecheck/build).
-- `make eval`: deterministic + retrieval-augmented evidence packet verification (12 questions).
+- `make ci`: backend/frontend gate; `uv run pytest` verified 96 passed / 3 skipped at `41ee7ac`
+  (live-run verified in this sync pass).
+- `make eval`: deterministic + retrieval-augmented evidence packet verification (12 questions,
+  synthetic corpus only).
 - `docker compose config`: validates server-first Compose wiring (`api`, `web`, `qdrant`).

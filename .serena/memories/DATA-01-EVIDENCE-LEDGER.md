@@ -1,7 +1,9 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: 86abb1f Merge fix/real-corpus-ingest: real-corpus ingest hardening
-Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/; src/nornikel_kg/resources/dictionaries/; src/nornikel_kg/services/; sample_docs/; eval/
+Last commit: 41ee7ac perf: skip co-occurrence edges on dense catalog-like spans
+Scope: src/nornikel_kg/domain/; src/nornikel_kg/adapters/duckdb/;
+  src/nornikel_kg/resources/dictionaries/; src/nornikel_kg/services/; sample_docs/; eval/;
+  scripts/ingest_corpus.py
 Area: DATA
 -->
 
@@ -15,162 +17,144 @@ retrieval-unit indexing, and answer-run/eval persistence in the DuckDB ledger.
 ## Source Of Truth
 
 - `src/nornikel_kg/domain/ids.py`: stable `source_id`, `artifact_id`, `span_id`, `fact_id`,
-  `claim_id` helpers, plus `source_id_from_bytes`/`stable_hash` used by W1-W3 code.
-- `src/nornikel_kg/domain/models.py`: Pydantic API/domain payload models.
+  `claim_id` helpers.
+- `src/nornikel_kg/domain/models.py`: Pydantic API/domain payload models, including
+  `AskFilters.geography`/`year_from`/`year_to`.
 - `src/nornikel_kg/domain/evidence.py`: `EvidenceSpanFactory`.
 - `src/nornikel_kg/domain/normalization.py`: `canonical_key()` mention-normalization helper.
-- `src/nornikel_kg/domain/extraction.py`: entity/relation type vocabularies and the LLM
-  extraction JSON schema (see `mem:ARCH-01-EVIDENCE-MVP`).
+- `src/nornikel_kg/domain/extraction.py`: entity/relation type vocabularies (`ENTITY_TYPES`,
+  `RELATION_TYPES`) and the LLM extraction JSON schema — does not include `publication`/
+  `DESCRIBED_IN` (see `mem:ARCH-01-EVIDENCE-MVP`).
 - `src/nornikel_kg/domain/analysis.py`: `ConflictDetector`/`GapAnalyzer`.
-- `src/nornikel_kg/ports/parser.py`, `ports/retrieval.py`, `ports/extraction.py`: port
-  contracts for parsing, retrieval, and mention extraction.
-- `src/nornikel_kg/adapters/duckdb/migrations/001_init.sql`: P0 ledger tables.
-- `src/nornikel_kg/adapters/duckdb/migrations/002_graph.sql`: graph/knowledge schema
-  (`ingestion_runs`, `artifacts`, `entities`, `entity_aliases`, `relations`,
-  `extraction_claims`, `answer_runs`, `eval_results`) — all now written by runtime code.
+- `src/nornikel_kg/adapters/duckdb/migrations/001_init.sql`, `002_graph.sql`: ledger and
+  graph/knowledge schema.
 - `src/nornikel_kg/adapters/duckdb/dictionary_loader.py`: idempotent entity/alias seeding.
 - `src/nornikel_kg/adapters/duckdb/repositories.py`: `DuckDBLedgerRepository` — the single
   DuckDB adapter for ledger, graph, retrieval-unit listing, and eval persistence.
-- `sample_docs/synthetic/`: original P0 fixture (report + mechanical property table).
-- `sample_docs/synthetic_v2/`: W5 corpus (see "W5 Synthetic Corpus" below).
+- `src/nornikel_kg/resources/dictionaries/{materials,regimes,properties,equipment}.yml`:
+  dictionary-seeded ontology (see "Real-Corpus Ontology Extension" below).
+- `sample_docs/synthetic/`: original P0 fixture. `sample_docs/synthetic_v2/`: W5 corpus.
+- `scripts/ingest_corpus.py`: batch real-corpus ingester (see `mem:RELEASE-01-VALIDATION`).
 - `eval/*.yml`: legacy fixtures, no longer read by any code (`mem:TEST-01-EVALUATION-GATES`).
 
 ## Entry Points
 
 - `DuckDBLedgerRepository.seed_synthetic_fixture` / `ingest_source_bytes`: CSV/Markdown/text
   ingest into `sources`/`evidence_spans`/`property_measurements`/`effect_claims`.
-- `DuckDBLedgerRepository.ingest_parsed_document(source_id, raw_sha256, title, document_type,
-  parsed: ParsedDocument, artifact_locator)`: writes text and table-row evidence spans from a
-  `ParsedDocument` (Docling/trafilatura output or the empty quarantine placeholder); returns
-  `(text_span_count, table_span_count)`.
-- `DuckDBLedgerRepository.record_ingestion_run(run_id, source_id, status, stage, error=None,
-  counters=None)`: appends a row to `ingestion_runs`; `status` is one of
-  `running`/`completed`/`quarantined`.
-- `DuckDBLedgerRepository.list_ingestion_runs(source_id=None)` /
-  `latest_run_statuses() -> dict[source_id, status]`: read the run ledger; `list_sources()`
-  joins the latest run status (`MAX(ir.status)` via a `ROW_NUMBER()` window) into each
-  `SourceSummary.status`, falling back to `"ledger"` when no run row exists.
-- `DuckDBLedgerRepository.get_source` / `delete_source`: unchanged from P0.
-- `DuckDBLedgerRepository.migrate`: applies every `migrations/*.sql` file, backfills legacy
-  columns, and seeds the graph dictionaries via `load_dictionaries(connection)`; runs at most
-  once per repository instance (`self._migrated` guard) instead of once per call.
-- `DuckDBLedgerRepository._connect()`: a `@contextmanager` used by every read/write method
-  instead of a bare `duckdb.connect(...)`; it serializes all access behind a class-level
-  `threading.RLock` (`_db_lock`) because concurrent request threads sharing one repository
-  instance used to race on writes (`TransactionContext Error: Conflict on update!`). Fixed in
-  `src/nornikel_kg/adapters/duckdb/repositories.py` (merge PR#12, `31f2459`).
+- `DuckDBLedgerRepository.ingest_parsed_document(...)`: writes text/table-row evidence spans
+  from a `ParsedDocument`.
+- `DuckDBLedgerRepository.record_ingestion_run` / `list_ingestion_runs` /
+  `latest_run_statuses`: ingestion run ledger.
+- `DuckDBLedgerRepository.set_source_metadata(source_id, *, year: int | None, geography: str |
+  None)`: `UPDATE sources SET year = COALESCE(?, year), geography = COALESCE(?, geography) WHERE
+  source_id = ?` — a `COALESCE` update, so a later call with `None` never clears an
+  already-set value. Called by `IngestionService._apply_source_metadata` after every parsed
+  ingest (best-effort, wrapped in a broad `except Exception` so metadata failures never block
+  ingest).
+- `DuckDBLedgerRepository.source_metadata() -> dict[str, dict[str, Any]]`: `SELECT source_id,
+  year, geography FROM sources`, returned as `{source_id: {"year": int | None, "geography": str
+  | None}}`; consumed by `DemoQAService._apply_source_scope` via the `RunRecorderProtocol`
+  contract.
+- `DuckDBLedgerRepository._connect()`: a `@contextmanager` used by every read/write method,
+  serializing access behind a class-level `threading.RLock` (`_db_lock`). As of commit
+  `f40ab72`, this now holds **one persistent** `duckdb.DuckDBPyConnection` per repository
+  instance (`self._connection`) instead of opening/closing a new connection per call — verified:
+  `self._connection = duckdb.connect(str(self.db_path))` only runs `if self._connection is
+  None`. Consequence: the process holding this repository instance holds the DuckDB file lock
+  for its lifetime; an external process (e.g. a `docker exec` DuckDB CLI session) cannot open
+  the same file while the `api` service is running.
 - `DuckDBLedgerRepository.load_demo_packet`: returns the full evidence/graph packet used by
-  `DemoQAService`; returns an **empty** `EvidenceLedgerPacket` when the ledger has no sources
-  or evidence — it does not raise `LookupError` (verified: no such raise exists in
-  `repositories.py`).
+  `DemoQAService`; returns an empty `EvidenceLedgerPacket` when the ledger is empty.
 - `load_dictionaries(connection, dictionaries_dir=None)` / `resolve_alias(connection, mention)`:
-  unchanged dictionary seeding/lookup helpers from W0.
-- Entity/relation repository methods (all in `repositories.py`): `find_entity(mention,
-  entity_type=None)`, `get_entity(entity_id)`, `create_entity(...)`,
-  `merge_entity_evidence(entity_id, span_ids, new_alias=None)`, `insert_relation(src_entity_id,
-  relation_type, dst_entity_id, evidence_span_ids)`, `insert_extraction_claim(claim_id_value,
-  source_id, span_id, payload, model_id, status)`, `search_entities(query, limit=20)`,
-  `list_graph_entities()`, `list_graph_relations()`, `list_alias_index() ->
-  list[tuple[alias_norm, entity_type, alias]]`.
-- Eval/answer persistence: `record_answer_run(run_id, question, filters, packet_stats,
-  model_id, latency_ms, verification)` / `get_answer_run(run_id)`; `store_eval_result(run_id,
-  question_id, metrics)` / `latest_eval_summary()`.
+  dictionary seeding/lookup helpers.
+- Entity/relation repository methods: `find_entity`, `get_entity`, `create_entity`,
+  `merge_entity_evidence`, `insert_relation`, `insert_extraction_claim`, `search_entities`,
+  `list_graph_entities`, `list_graph_relations`, `list_alias_index`.
+- Eval/answer persistence: `record_answer_run`/`get_answer_run`; `store_eval_result`/
+  `latest_eval_summary`.
 
 ## Current Behavior
 
-CSV uploads still require `experiment_id`, `material`, `regime`, `temperature_c`, `duration_h`,
-`atmosphere`, `property`, `method`, `baseline_value`, `treated_value`, `unit`, `effect`, and
-become `table_row` evidence spans plus source-scoped measurements/effects. Markdown/text
-uploads remain evidence spans without derived measurements.
+CSV uploads still require the P0 measurement columns and become `table_row` spans plus
+source-scoped measurements/effects. PDF/DOCX uploads route through `DoclingDocumentParser`;
+a PDF with no extractable text layer is quarantined with zero evidence spans.
 
-PDF/DOCX uploads route through `DoclingDocumentParser` (`do_ocr=False`, `do_table_structure=
-True`); each Docling `ParsedBlock` becomes a `text` evidence span with a `block_N[:bbox_LxT]`
-locator and page number, and each `ParsedTableRow` becomes a `table_row` span. A PDF with no
-extractable text layer raises `NoTextLayerError`, which the ingestion service turns into a
-`quarantined` run row with **zero** evidence spans (the source row itself is still registered so
-the UI can show the quarantined state) — OCR is explicitly out of scope. URL imports route
-through `TrafilaturaUrlFetcher.fetch`, producing one `ParsedBlock` per non-empty line with
-`parser_profile="trafilatura_v1"` and optional `date` metadata.
-
-Every successful or quarantined ingest writes an `ingestion_runs` row
-(`run_id = "ing_" + stable_hash([source_id], 16)`). Raw uploaded/fetched bytes are archived
-best-effort under `ARTIFACT_ROOT/sources/<source_id>/<filename or "parsed.txt">`
-(`ARTIFACT_ROOT` defaults to `data/artifacts`, resolved via `services/runtime.py`); archive
-failures are logged and never block ingestion.
+Every parsed ingest additionally calls `_apply_source_metadata` (in `IngestionService`), which
+writes `sources.year`/`sources.geography` via `set_source_metadata` using filename+head-text
+year detection and a Cyrillic-vs-Latin geography heuristic (see `mem:ARCH-01-EVIDENCE-MVP` for
+the exact heuristic). `sources.year`/`sources.geography` are added via
+`DuckDBLedgerRepository.migrate`'s `_ensure_column(connection, "sources", "year", "INTEGER")` /
+`_ensure_column(connection, "sources", "geography", "TEXT")` — additive, non-destructive schema
+evolution, unchanged migration mechanism from P0.
 
 Extraction writes `entities`/`entity_aliases`/`relations`/`extraction_claims` rows keyed by
-stable IDs (`ent_<type>_<hash>` for created entities); `EntityResolutionService` never merges
-entities across `entity_type` and treats a canonical-key mismatch (but existing entity match) as
-an alias addition rather than a new entity.
+stable IDs; every source additionally gets one `publication` entity plus `DESCRIBED_IN`/
+`AUTHORED_BY` relations via `ExtractionService._link_publication` (`mem:ARCH-01-EVIDENCE-MVP`).
+`EntityResolutionService` never merges entities across `entity_type` and treats a canonical-key
+mismatch (but existing entity match) as an alias addition rather than a new entity.
 
 Retrieval indexing writes into two Qdrant collections when `EMBEDDING_BACKEND` is not `off`:
-`evidence_units` (`QDRANT_COLLECTION` env, default name) carries `source_id`, `span_type`,
-`security_label` payload; `entities` carries `entity_type` payload. Both are rebuilt per-source
-via `RetrievalService.index_source` (delete-then-reindex) and in bulk via `reindex_all()`.
+`evidence_units` and `entities`. Both are rebuilt per-source via `RetrievalService.index_source`
+and in bulk via `reindex_all()`, now exposed through `POST /sources/reindex-all`
+(`mem:RELEASE-01-VALIDATION`).
+
+## Real-Corpus Ontology Extension (2026-07-03, commit `58760b3`)
+
+`src/nornikel_kg/resources/dictionaries/materials.yml` gained 17 metallurgy-domain entries
+covering slag/matte pyrometallurgy (slag, copper matte, nickel matte), electrowinning (cathode
+nickel, electrolyte/catholyte), desalination (technogenic gypsum, sulfates, chlorides, SO2),
+beneficiation (nickel ore, concentrate), and general metallurgy (PGM/precious metals, copper,
+nickel, cobalt, metallic phase) — verified via `grep` for the specific canonical names/aliases.
+`regimes.yml` gained leaching, electrowinning, slag depletion, converting, smelting, flotation,
+desalination, drying, circulation, injection (15 `canonical_name:` entries total, verified by
+count). `properties.yml` gained concentration, flow rate, extraction, temperature, coalescence,
+metal-loss properties (14 entries total, verified by count). `equipment.yml` gained Vanyukov
+furnace, flash smelting furnace, electrowinning bath/cell, diaphragm cell, flotation machine,
+tube furnace (9 total entries: 3 original demo entries + 6 new, verified by listing).
+**Geomechanics-specific terms are not covered** (verified: no matching alias hits for
+`геомех`/`geomechanic`/`горн` in any dictionary file), so this extension only partially closes
+gap G1 from `.serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md` for the full real-corpus
+domain span.
+
+`tests/unit/test_scope_and_constraints.py::test_real_domain_dictionary_resolves` verifies
+`find_entity("шлак", "material")`, `find_entity("электроэкстракция", "regime")`,
+`find_entity("ПВП", "equipment")`, and `find_entity("скорость циркуляции", "property")` all
+resolve; `test_publication_and_authors_linked` verifies a source becomes a `publication` entity
+with `DESCRIBED_IN`/`AUTHORED_BY` relations after `ExtractionService.process_source`.
 
 ## W5 Synthetic Corpus
 
 `scripts/generate_synthetic_docs.py` deterministically writes `sample_docs/synthetic_v2/`
-(17 committed sources — verified via `manifest.json` `sources` list and directory listing): 4
-measurement CSVs (`v2_measurements_cuni.csv`, `_nicrmo.csv`, `_nicu.csv`, `_solution.csv`), 6 RU
-DOCX protocols (`v2_protocol_01..06_*.docx`, built with `python-docx`), 3 RU Markdown notes
-(`v2_note_corrosion.md`, `_decisions.md`, `_qualitative.md`), 2 EN reportlab PDFs
-(`v2_report_nicrmo_rolling_en.pdf`, `_nicu_aging_en.pdf`), 1 image-only quarantine PDF
-(`v2_scan_no_text_layer.pdf`), and 1 HTML page for URL import (`v2_online_resource.html`), plus
-`manifest.json`. The corpus seeds analytics fixtures: an HV-vs-HRC method mismatch, a
-contradictory elongation direction, coverage gaps, dated decision/conclusion entities for the
-timeline, alias pairs `МН30`/`CuNi30` and `Ni30Cu`/`Ni-30Cu`, and one injected prompt-like line
-in `v2_protocol_02` (untrusted evidence text, not followed as an instruction — see
-`mem:SEC-01-ACL-AND-PROMPT-INJECTION`).
-`tests/integration/test_synthetic_v2_corpus.py` verifies manifest-vs-committed-file
-consistency, offline CSV/Markdown ingestion with conflict and alias assertions
-(`test_csv_and_markdown_corpus_ingests_offline`), and `docling`/`trafilatura`-gated tests via
-`pytest.importorskip` (`test_docx_corpus_ingests_with_docling`,
-`test_scan_pdf_quarantines_with_docling`, `test_html_fixture_extracts_via_trafilatura_offline`)
-that skip when those optional packages are absent.
-
-## Real-Corpus Live Test (2026-07-03)
-
-A real 816KB Gipronikel DOCX (slag-depletion article, from the gitignored `DATA_HACK/` corpus —
-see `.serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md`) parsed into 278 `text`/`table_row`
-evidence spans through the same `DoclingDocumentParser` -> `ingest_parsed_document` path described
-above; this is the first ledger-scale datapoint from outside the 17-source synthetic corpus. The
-dictionaries in `src/nornikel_kg/resources/dictionaries/` (Ni-Cu/Cu-Ni/Ni-Cr-Mo alloys only, per
-`Contracts And Data` below) do not cover this document's slag/matte pyrometallurgy domain, so
-dictionary-based extraction found no entities for it — see `mem:TECHDEBT-01-NOW` (gap G1).
+(17 committed sources per `manifest.json`): 4 measurement CSVs, 6 RU DOCX protocols, 3 RU
+Markdown notes, 2 EN reportlab PDFs, 1 image-only quarantine PDF, and 1 HTML page, plus
+`manifest.json`. `tests/integration/test_synthetic_v2_corpus.py` verifies manifest-vs-committed
+consistency and offline/docling/trafilatura-gated ingestion behavior.
 
 ## Contracts And Data
 
-Separate IDs for `source_id`, `artifact_id`, `span_id`, `fact_id`, `claim_id` unchanged from P0.
-Table rows/cells remain first-class evidence units.
-
-`entities` rows carry `entity_id`, `entity_type`, `canonical_key`, `canonical_name`,
-`metadata_json`, `evidence_span_ids_json`, `confidence`, `validation_status`. `entity_aliases`
-is keyed by `(alias_norm, entity_id)`. `relations` links `src_entity_id`/`dst_entity_id`
-through `relation_type`, evidence span IDs, confidence, `validation_status`. `ingestion_runs`,
-`artifacts`, `extraction_claims`, `answer_runs`, and `eval_results` are all now written by
-runtime code paths (ingestion, extraction, QA, and eval respectively) — none remain unused P1
-placeholders.
-
-P0/P1 dictionaries cover Ni-Cu, Cu-Ni, Ni-Cr-Mo alloys; annealing, aging, cold rolling, solution
-treatment/quench, welding/cladding; and hardness, tensile strength, elongation, conductivity,
-corrosion rate, grain size, porosity/cracking, phase fraction. Gap analysis (`GapAnalyzer`) only
-considers dictionary-seeded entities (IDs not starting with `ent_`), so extracted-but-unseeded
-entities never appear in the coverage matrix.
+Separate IDs for `source_id`, `artifact_id`, `span_id`, `fact_id`, `claim_id`. Table rows/cells
+remain first-class evidence units. `entities` rows carry `entity_id`, `entity_type`,
+`canonical_key`, `canonical_name`, `metadata_json`, `evidence_span_ids_json`, `confidence`,
+`validation_status`. `sources` rows now also carry `year`/`geography` (nullable, additively
+migrated). Gap analysis (`GapAnalyzer`) only considers dictionary-seeded entities (IDs not
+starting with `ent_`), so `publication`/`person` entities (which use `ent_` IDs via
+`EntityResolutionService`) never appear in the coverage matrix.
 
 ## Invariants
 
 - Do not reconstruct evidence from Qdrant text alone; hybrid search hits are always rejoined
-  against DuckDB and re-filtered by `security_label` before being trusted
-  (`RetrievalService.retrieve_span_ids`).
+  against DuckDB and re-filtered by `security_label` before being trusted.
 - Do not overwrite conflicting measurements or average them silently.
 - Do not call `duckdb.connect(...)` directly from repository methods; always go through
-  `DuckDBLedgerRepository._connect()` so concurrent request threads stay serialized.
+  `DuckDBLedgerRepository._connect()`. The connection is now persistent per instance, so
+  external out-of-process access to the DuckDB file is not possible while an instance holding
+  the lock (e.g. the running `api` service) is alive.
 - Numeric measurements require property, value, unit, and supporting spans.
 - LLM-extracted facts without existing EvidenceSpan IDs are rejected; invalid LLM extraction
   payloads are recorded with `status="rejected"` in `extraction_claims` and fall back to
   rule-only mentions.
-- Final answer sentences without support IDs are rejected/dropped by the composer.
+- `set_source_metadata` uses `COALESCE`, so passing `None` for `year`/`geography` never clears a
+  previously-set value.
 - Dictionary seeding is upsert-only; entity resolution never merges across `entity_type`.
 - Parser/extraction/retrieval failures degrade the ledger write (quarantine, empty indexed
   count, rule-only fallback) but never lose the source registration row.
@@ -179,17 +163,19 @@ entities never appear in the coverage matrix.
 
 Extend `sample_docs/synthetic_v2/manifest.json` and
 `tests/integration/test_synthetic_v2_corpus.py` together whenever the synthetic corpus changes.
-Add migrations and domain tests before adding parser/indexing code that writes new fact types.
+Extend `tests/unit/test_scope_and_constraints.py` and the relevant dictionary YAML together
+whenever the real-corpus ontology changes. Add migrations and domain tests before adding
+parser/indexing code that writes new fact types.
 
 ## Verification
 
-- `make ci`: runs ruff, mypy, pytest (90 passed, 3 skipped at `ece33d3`), frontend typecheck/build.
-- `make eval`: `scripts/run_eval.py` — 12 hardcoded questions verifying citation coverage,
-  material alias resolution (`МН30` -> `CuNi30`), provenance, comparison, gap, and conflict
-  behavior against the live DuckDB ledger.
-- `tests/unit/test_dictionary_loader.py`: dictionary seeding/idempotency/alias resolution.
+- `uv run pytest`: 96 tests pass, 3 skipped, at `41ee7ac` (live-run verified in this sync pass).
+- `make eval`: `scripts/run_eval.py` — 12 hardcoded questions against the synthetic corpus only.
+- `tests/unit/test_dictionary_loader.py`, `tests/unit/test_scope_and_constraints.py`: dictionary
+  seeding/idempotency/alias resolution, real-domain ontology resolution, publication/author
+  linking, geography/year scope filters, numeric constraint filters.
 - `tests/unit/test_entity_resolution.py`, `tests/unit/test_extraction_service.py`,
   `tests/unit/test_retrieval_service.py`, `tests/unit/test_answer_composer.py`,
-  `tests/unit/test_ingestion_service.py`: unit coverage for the W1-W3 services.
+  `tests/unit/test_ingestion_service.py`: unit coverage for services.
 - `tests/integration/test_graph_api.py`, `tests/integration/test_ingest_api.py`: API-level
   coverage for entity/graph/ingest endpoints.

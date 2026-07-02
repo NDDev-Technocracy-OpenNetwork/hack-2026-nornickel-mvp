@@ -1,7 +1,9 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: 86abb1f Merge fix/real-corpus-ingest: real-corpus ingest hardening
-Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml; .env.example; pyproject.toml; .serena/plans/; .serena/reviews/; docs/deployment/; .gitignore
+Last commit: 41ee7ac perf: skip co-occurrence edges on dense catalog-like spans
+Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; scripts/;
+  tests/; docker-compose.yml; .github/workflows/ci.yml; .env.example; pyproject.toml;
+  .serena/plans/; .serena/reviews/; docs/deployment/; .gitignore
 Area: CORE
 -->
 
@@ -13,19 +15,23 @@ Index the durable project knowledge for the Nornikel Materials KG Search hackath
 
 ## Source Of Truth
 
-- `README.md`: repository overview, quick start, demo scenario, and implemented W0-W5 scope.
+- `README.md`: repository overview, quick start, demo scenario, and implemented scope.
 - `AGENTS.md`: Codex-native project instructions and plugin/tooling policy.
 - `.claude/CLAUDE.md`: Claude Code project memory and operational commands.
 - `apps/web/`: React/Vite analysis workbench.
 - `services/api/`: FastAPI route layer.
 - `src/nornikel_kg/`: backend domain, ports, adapters, and application services.
-- `eval/`: legacy YAML gold/adversarial fixtures (`eval/gold_questions.yml`, `eval/adversarial_questions.yml`, `eval/expected_spans.yml`); these files are no longer read by any code path (see `mem:TEST-01-EVALUATION-GATES`).
+- `scripts/ingest_corpus.py`: batch-ingests a real document corpus directory (`.pdf`, `.docx`,
+  `.csv`, `.md`, `.markdown`, `.txt`) into the ledger inside the API container, with per-file
+  size caps and quarantine-over-crash semantics (`SUPPORTED` set, `--max-mb` flag).
+- `eval/`: legacy YAML gold/adversarial fixtures; not read by any code path (`mem:TEST-01-EVALUATION-GATES`).
 - `sample_docs/synthetic/`: original P0 fixture. `sample_docs/synthetic_v2/`: W5 17-source synthetic corpus with `manifest.json`.
 - `tests/`: unit and integration tests.
 - `docs/deployment/nornikel-nddev.md`: primary live-stand deployment contract (W5).
-- `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md`: primary scaffold contract for P0 implementation.
-- `.serena/plans/00_PLAN_INDEX.md`: 2026-07-02 MVP implementation plan package (waves W0-W5), now fully implemented per this memory set.
-- `.serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md`: 2026-07-03 full-track requirement brief («Научный клубок»), gap analysis G1-G10 against the real `DATA_HACK/` corpus, and revised waves W6-W8 (see `mem:DOCS-01-PLANNING-SOURCE`).
+- `.serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md`: full-track requirement brief («Научный
+  клубок») and gap analysis G1-G10 against the real `DATA_HACK/` corpus; wave W6.3 (ontology
+  extension) is now substantially implemented (`mem:DATA-01-EVIDENCE-LEDGER`,
+  `mem:TECHDEBT-01-NOW`).
 - `.serena/reviews/`: tracked plan critical review and research evidence register.
 
 ## Entry Points
@@ -40,67 +46,76 @@ Index the durable project knowledge for the Nornikel Materials KG Search hackath
 
 ## Current Behavior
 
-Waves W0-W5 (merge commits `1bca77f` PR#6, `d27bf88` PR#7, `824e19a` PR#8, `b117459` PR#9,
-`f9b0830` PR#10, `f4bf404` PR#11) closed the ingest/extraction/retrieval/frontend/corpus
-gaps that were open at W0. The system now:
+Waves W0-W5 closed the ingest/extraction/retrieval/frontend/corpus gaps that were open at W0
+(see `mem:DOCS-01-PLANNING-SOURCE` for the merge-commit chain). A real-corpus hardening wave
+(commit `58760b3`, squashed and rewritten to drop 4.2GB of accidentally staged `DATA_HACK`
+blobs, followed by `0dfeba3`, `ed69686`, `074531e`, `23a220a`, `4f482d0`, `42d5742`, `f40ab72`,
+`41ee7ac`) then extended the system for the real case corpus:
 
-- Parses PDF/DOCX with Docling (`src/nornikel_kg/adapters/docling/parser.py`, text layer only,
-  `do_ocr=False`) and fetches URLs with trafilatura
-  (`src/nornikel_kg/adapters/trafilatura/fetcher.py`); parser/no-text-layer failures quarantine
-  the source instead of returning 500 (`src/nornikel_kg/services/ingestion_service.py`).
-- Extracts entities/relations via dictionary alias-scan (always), optional GLiNER zero-shot NER
-  (`GLINER_ENABLED`, default `true`), and optional LLM guided-JSON extraction with an
-  `extraction_claims` audit trail (`src/nornikel_kg/services/extraction_service.py`), resolved
-  through `EntityResolutionService` (`src/nornikel_kg/services/entity_resolution.py`) and
-  materialized on demand as a NetworkX `MultiDiGraph`
-  (`src/nornikel_kg/services/graph_service.py`).
-- Retrieves via Qdrant hybrid dense+sparse search with RRF fusion
-  (`src/nornikel_kg/adapters/qdrant_index/index.py`, USER-bge-m3 dense +
-  fastembed/Qdrant-bm25 sparse in `src/nornikel_kg/adapters/embeddings/local.py`), gated by
-  `EMBEDDING_BACKEND=off|local|fake` and always rejoined/rechecked against DuckDB
-  (`src/nornikel_kg/services/retrieval_service.py`).
-- Synthesizes answers with an LLM composer that only cites `span_id`s from the evidence
-  packet, with one regeneration and a deterministic fallback
-  (`src/nornikel_kg/services/answer_composer.py`); every `/qa/ask` call is recorded to
-  `answer_runs` and replayable via `GET /qa/runs/{run_id}`.
-- Detects conflicts (`contradictory_direction`, `method_mismatch`, `numeric_disagreement > 15%`
-  under the same method) and computes a material x regime x property coverage/gap matrix
-  (`src/nornikel_kg/domain/analysis.py`, `GET /gaps/analyze`).
-- Ships a synthetic corpus v2 of 17 committed sources (4 CSV, 6 RU DOCX, 3 RU MD, 2 EN PDF,
-  1 image-only quarantine PDF, 1 HTML) under `sample_docs/synthetic_v2/` with a matching
-  `manifest.json`, generated deterministically by `scripts/generate_synthetic_docs.py`.
+- **Ontology extension** (`58760b3`): `src/nornikel_kg/resources/dictionaries/materials.yml`
+  gained 17 metallurgy materials (slag, matte, cathode nickel, electrolyte, technogenic gypsum,
+  sulfates, chlorides, SO2, ore, concentrate, PGM/precious metals, copper, nickel, cobalt,
+  metallic phase, etc.); `regimes.yml` gained leaching, electrowinning, slag depletion,
+  converting, smelting, flotation, desalination, drying, circulation, injection (10 entries,
+  verified `grep -c canonical_name: regimes.yml` -> 15 total); `properties.yml` gained
+  concentration/flow-rate/extraction/temperature/coalescence/metal-loss properties (14 total);
+  `equipment.yml` gained Vanyukov furnace, flash smelting furnace, electrowinning bath,
+  diaphragm cell, flotation machine, tube furnace (6 entries, verified by entry count).
+- **Publication/author graph** (`src/nornikel_kg/services/extraction_service.py`,
+  `ExtractionService._link_publication`): every ingested source becomes a `publication` entity
+  (via `EntityResolutionService.resolve_or_create`); mentioned material/regime/property entities
+  get a `DESCRIBED_IN` edge to it; author names found via `_extract_authors` (RU «Фамилия И.О.»
+  and EN "I.O. Surname" regexes, capped at 12) get `person` entities with `AUTHORED_BY` edges.
+  `publication`/`DESCRIBED_IN` are **not** listed in `domain/extraction.py`'s `ENTITY_TYPES`/
+  `RELATION_TYPES` tuples (those tuples only constrain the LLM guided-JSON schema); this is a
+  verified vocabulary gap, not a runtime error, since `resolve_or_create`/`insert_relation`
+  never validate against those tuples.
+- **Scoped QA filters** (`src/nornikel_kg/services/qa_service.py`): `_parse_numeric_constraints`
+  parses RU/symbolic numeric operators (≤/≥/не более/не менее/от + value + unit) from the
+  question text and `_apply_numeric_constraints` filters experiments whose measurement unit
+  matches; `_apply_source_scope` filters experiments by `AskFilters.geography`/`year_from`/
+  `year_to` via `RunRecorderProtocol.source_metadata()`.
+- **Corpus ingestion hardening**: `IngestionService.enrich_source` (re)runs the enrichment stage
+  for an already-parsed source (recovery/re-enrichment); `POST /sources/{id}/enrich` and
+  `POST /sources/reindex-all` (`services/api/routes/sources.py`) expose this and a batched
+  background `RetrievalService.reindex_all()` respectively; `LLM_EXTRACTION_ENABLED` (default
+  `false`, `src/nornikel_kg/services/runtime.py:get_extraction_service`) gates ingest-time LLM
+  extraction separately from the QA answer composer.
+- **Performance fixes**: `ExtractionService._alias_index()` caches the alias table snapshot per
+  service instance instead of re-querying per span; `DuckDBLedgerRepository._connect()`
+  (`src/nornikel_kg/adapters/duckdb/repositories.py`) now holds one persistent
+  `duckdb.DuckDBPyConnection` behind the class `_db_lock` (`threading.RLock`) instead of
+  connecting/closing per call — this means the API process holds the DuckDB file lock for its
+  lifetime, so `docker exec`-based diagnostics cannot open the DB file directly while the `api`
+  container runs; `ExtractionService.MAX_CO_OCCURRENCE_ENTITIES = 12` skips co-occurrence-edge
+  generation on spans that resolve more than 12 entities (dense catalog/TOC/reference-list spans).
+- **Frontend geography/year filters**: `apps/web/src/widgets/analysis-workbench/ui/AnalysisWorkbench.tsx`
+  adds geography/year_from/year_to inputs; `apps/web/src/shared/api/types.ts`'s `AskFilters`
+  gained matching optional fields; `apps/web/src/shared/api/client.ts`'s `hasNonEmptyFilters`
+  handles scalar (not just array) filter values.
+- **Nginx body limit**: `apps/web/nginx.conf` raised `client_max_body_size` from `6m` to `32m`
+  (real DOCX files over 6MB were being 413-rejected).
 
-`uv run pytest` passes **90 tests, 3 skipped** at `ece33d3` (skips are `docling`/`trafilatura`
-`importorskip` guards in `tests/integration/test_synthetic_v2_corpus.py` when those optional
-`ingest` extras are not installed); `uv run ruff check .` and `uv run mypy` report no issues.
-Merge commits `edfa173` (PR#13, LLM gateway `_strictify` strict-mode fix) and `7456565` (PR#14,
-answer-composer/extraction-service inline JSON-format hints and one-retry validation) hardened
-the LLM gateway/composer path after `f4bf404`; `.serena/plans/06_DEPLOYMENT_AND_OBSERVABILITY.md`
-records the completed `dataeyes.ai` key discovery (`ece33d3`, see `mem:TECHDEBT-01-NOW`).
-
-2026-07-03 (`02b2f88`, `4da4538`, `86abb1f`): `.serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md`
-records the full track brief and a gap analysis (G1-G10) against the real case corpus
-`DATA_HACK/` (~4.9 GB, gitignored via `4da4538`, never committed). A live test against a real
-816KB Gipronikel DOCX (278 evidence spans) found unbounded per-span LLM extraction blocking
-`/sources/upload` behind the 300s proxy timeout; the fix (`fix/real-corpus-ingest`, commit
-`f62f17c`) caps LLM extraction and backgrounds enrichment, and is now merged into `main` via
-`86abb1f` (verified: `MAX_LLM_SPANS_PER_SOURCE`/`SYNC_ENRICHMENT` are present in
-`src/nornikel_kg/services/extraction_service.py`/`runtime.py` at `main` HEAD). The push of
-`86abb1f` to `origin/main` is still pending a GitHub network recovery — see
-`mem:TECHDEBT-01-NOW`.
+`uv run pytest` passes **96 tests, 3 skipped** at `41ee7ac` (verified by a live run; skips remain
+the `docling`/`trafilatura` `importorskip` guards); `uv run ruff check .` and `uv run mypy` were
+not re-run in this sync pass — see `mem:RELEASE-01-VALIDATION` for the last verified status.
+Local `main` is in sync with `origin/main` (`git rev-list --left-right --count
+origin/main...main` -> `0\t0`, verified) — the history rewrite in `58760b3` has already been
+pushed; there is no pending push backlog (previously recorded in `mem:TECHDEBT-01-NOW`, now
+resolved).
 
 ## Contracts And Data
 
 Full flow: React/Vite workbench -> FastAPI (`/sources/upload`, `/sources/import-url`,
-`/qa/ask`, `/entities/search`, `/entities/{id}`, `/graph/neighborhood`, `/graph/timeline`,
-`/gaps/analyze`, `/eval/summary`) -> DuckDB-backed evidence ledger + entity/relation graph ->
-optional Qdrant retrieval augmentation -> deterministic-or-LLM answer synthesis -> claim
-verification -> answer-run persistence.
+`/sources/{id}/enrich`, `/sources/reindex-all`, `/qa/ask`, `/entities/search`, `/entities/{id}`,
+`/graph/neighborhood`, `/graph/timeline`, `/gaps/analyze`, `/eval/summary`) -> DuckDB-backed
+evidence ledger + entity/relation graph -> optional Qdrant retrieval augmentation ->
+deterministic-or-LLM answer synthesis -> claim verification -> answer-run persistence.
 
 Upload accepts `.csv`, `.md`, `.markdown`, `.txt`, `.text`, `.pdf`, `.docx` with filename/MIME/
 size validation (`services/api/routes/sources.py`); `MAX_SOURCE_UPLOAD_BYTES` code default is
-`5242880` bytes; bundled web Nginx sets `client_max_body_size 6m` and `proxy_read_timeout 300s`
-for `/api/` (`apps/web/nginx.conf`, needed for slow Docling/embedding-model cold starts).
+`5242880` bytes; bundled web Nginx sets `client_max_body_size 32m` (raised from `6m`) and
+`proxy_read_timeout 300s` for `/api/` (`apps/web/nginx.conf`).
 
 ## Invariants
 
@@ -111,6 +126,9 @@ for `/api/` (`apps/web/nginx.conf`, needed for slow Docling/embedding-model cold
 - React/Vite and FastAPI are P0 UI/API layers, not P1.
 - No OCR: PDFs without a text layer are quarantined, never OCR'd (`NoTextLayerError`).
 - Only `src/nornikel_kg/adapters/llm/gateway.py` may `import litellm`.
+- Do not call `duckdb.connect(...)` outside `DuckDBLedgerRepository._connect()`; the connection
+  is now persistent and shared, so external processes must go through the API, not a direct
+  file open, while the API is running.
 
 ## Change Rules
 
@@ -121,5 +139,4 @@ Update this index whenever a new durable memory is added, renamed, split, or del
 - `make ci`: verifies backend ruff/mypy/pytest and frontend typecheck/build.
 - `make eval`: runs `scripts/run_eval.py` (12 hardcoded `EVAL_QUESTIONS`).
 - `docker compose config`: verifies Compose syntax without requiring local secrets.
-- `uv run pytest`: 90 tests pass, 3 skipped at `ece33d3`; `uv run ruff check .` and
-  `uv run mypy` report no issues.
+- `uv run pytest`: 96 tests pass, 3 skipped at `41ee7ac` (live-run verified).
