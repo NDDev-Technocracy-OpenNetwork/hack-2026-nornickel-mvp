@@ -77,6 +77,7 @@ class ExtractionService:
         self.llm = llm
         self._mention_extractor = mention_extractor
         self._use_gliner = use_gliner
+        self._alias_cache: list[tuple[str, str, str]] | None = None
 
     @property
     def mention_extractor(self) -> MentionExtractorPort | None:
@@ -220,11 +221,23 @@ class ExtractionService:
             mentions.extend(self._llm_mentions(source_id, span))
         return mentions
 
+    def _alias_index(self) -> list[tuple[str, str, str]]:
+        """Alias table snapshot, cached per service instance.
+
+        Loading it per span turned real-corpus enrichment quadratic (full
+        table scan × hundreds of spans × concurrent sources). Dictionary
+        aliases only grow via migrations, and learned aliases are not needed
+        for the scan, so a cached snapshot is safe.
+        """
+        if self._alias_cache is None:
+            self._alias_cache = self.repository.list_alias_index()
+        return self._alias_cache
+
     def _dictionary_mentions(self, text: str) -> list[EntityMention]:
         """Alias-scan rules: always available, deterministic, offline."""
         normalized_text = canonical_key(text)
         mentions: list[EntityMention] = []
-        for alias_norm, entity_type, alias in self.repository.list_alias_index():
+        for alias_norm, entity_type, alias in self._alias_index():
             if len(alias_norm) < 3:
                 continue
             # Stemmed match tolerates Russian case endings («старение» ~ «старения»).
