@@ -1,7 +1,7 @@
 <!-- Memory Metadata
-Last updated: 2026-07-02
-Last commit: 1bca77f Merge pull request #6 from rldyourmnd/feat/w0-alignment-and-seams
-Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml; .env.example; pyproject.toml; .serena/plans/; .serena/reviews/
+Last updated: 2026-07-03
+Last commit: f4bf404 Merge pull request #11 from rldyourmnd/feat/w5-corpus-eval-hardening
+Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml; .env.example; pyproject.toml; .serena/plans/; .serena/reviews/; docs/deployment/
 Area: CORE
 -->
 
@@ -13,85 +13,88 @@ Index the durable project knowledge for the Nornikel Materials KG Search hackath
 
 ## Source Of Truth
 
-- `README.md`: repository overview, quick start, demo scenario, architecture boundary, and current scaffold status.
+- `README.md`: repository overview, quick start, demo scenario, and implemented W0-W5 scope.
 - `AGENTS.md`: Codex-native project instructions and plugin/tooling policy.
 - `.claude/CLAUDE.md`: Claude Code project memory and operational commands.
 - `apps/web/`: React/Vite analysis workbench.
 - `services/api/`: FastAPI route layer.
 - `src/nornikel_kg/`: backend domain, ports, adapters, and application services.
-- `eval/`: gold/adversarial evaluation fixtures.
-- `sample_docs/`: committed synthetic smoke-test corpus.
+- `eval/`: legacy YAML gold/adversarial fixtures (`eval/gold_questions.yml`, `eval/adversarial_questions.yml`, `eval/expected_spans.yml`); these files are no longer read by any code path (see `mem:TEST-01-EVALUATION-GATES`).
+- `sample_docs/synthetic/`: original P0 fixture. `sample_docs/synthetic_v2/`: W5 17-source synthetic corpus with `manifest.json`.
 - `tests/`: unit and integration tests.
+- `docs/deployment/nornikel-nddev.md`: primary live-stand deployment contract (W5).
 - `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md`: primary scaffold contract for P0 implementation.
-- `.serena/newproj/nornikel-kg-search/19_OWNER_DECISIONS.md`: closed owner decisions for implementation, deployment, data, LLM, security, and UX.
-- `.serena/newproj/nornikel-kg-search/16_MVP_BLUEPRINT.md`: product loop and MVP module boundaries.
-- `.serena/newproj/nornikel-kg-search/11_PROJECT_STRUCTURE.md`: planned scaffold layout after owner approval.
-- `.serena/plans/00_PLAN_INDEX.md`: 2026-07-02 MVP implementation plan package (waves W0-W5); `.serena/plans/01_MVP_SCOPE_AND_DECISIONS.md` supersedes `19_OWNER_DECISIONS.md` on conflict (open-weight-only LLM policy, dataeyes.ai provider, Langfuse observability, new-server rollout, ~2026-07-16 deadline).
-- `.serena/reviews/`: tracked plan critical review and research evidence register (other review outputs stay gitignored).
+- `.serena/plans/00_PLAN_INDEX.md`: 2026-07-02 MVP implementation plan package (waves W0-W5), now fully implemented per this memory set.
+- `.serena/reviews/`: tracked plan critical review and research evidence register.
 
 ## Entry Points
 
-- `mem:ARCH-01-EVIDENCE-MVP`: architecture, module boundaries, and stack decisions.
-- `mem:DATA-01-EVIDENCE-LEDGER`: evidence IDs, DuckDB ledger, tables, graph, and answer claims.
+- `mem:ARCH-01-EVIDENCE-MVP`: architecture, module boundaries, ports/adapters, and stack decisions.
+- `mem:DATA-01-EVIDENCE-LEDGER`: evidence IDs, DuckDB ledger, graph/entity schema, and answer claims.
 - `mem:SEC-01-ACL-AND-PROMPT-INJECTION`: source-label filtering, prompt-injection, and internal-document safety invariants.
 - `mem:TEST-01-EVALUATION-GATES`: required checks, metrics, and acceptance gates.
-- `mem:DOCS-01-PLANNING-SOURCE`: planning-doc ownership and current scaffold status.
-- `mem:RELEASE-01-VALIDATION`: validation, CI, Compose, browser proof, and deployment checks.
-- `mem:TECHDEBT-01-NOW`: verified current scaffold gaps and migration triggers.
+- `mem:DOCS-01-PLANNING-SOURCE`: planning-doc ownership and current implementation status.
+- `mem:RELEASE-01-VALIDATION`: validation, CI, Compose, and deployment checks.
+- `mem:TECHDEBT-01-NOW`: verified current gaps and migration triggers.
 
 ## Current Behavior
 
-The repository contains a working P0 scaffold: FastAPI API, React/Vite workbench, DuckDB-backed
-evidence ledger, CSV/Markdown upload API, deterministic evidence-backed QA response,
-fixtures/eval, CI workflow, Docker Compose configuration, and deployment notes for
-`fa.nddev.asia`. `README.md` (commit `d5e61fa`) now documents the hackathon open-weight-only
-LLM rules and a new primary live stand at `https://nornikel.nddev.asia`, keeping
-`https://fa.nddev.asia` as an interim mirror. Wave W0 (merge commit `1bca77f`, PR #6) added a
-graph/knowledge schema migration (`src/nornikel_kg/adapters/duckdb/migrations/002_graph.sql`)
-with idempotent dictionary seeding, and an `LLMPort`/LiteLLM gateway
-(`src/nornikel_kg/ports/llm.py`, `src/nornikel_kg/adapters/llm/`) gated by `LLM_ENABLED`
-(default `false`, deterministic `FakeLLM`); neither is yet called from any ingestion or QA
-service.
+Waves W0-W5 (merge commits `1bca77f` PR#6, `d27bf88` PR#7, `824e19a` PR#8, `b117459` PR#9,
+`f9b0830` PR#10, `f4bf404` PR#11) closed the ingest/extraction/retrieval/frontend/corpus
+gaps that were open at W0. The system now:
+
+- Parses PDF/DOCX with Docling (`src/nornikel_kg/adapters/docling/parser.py`, text layer only,
+  `do_ocr=False`) and fetches URLs with trafilatura
+  (`src/nornikel_kg/adapters/trafilatura/fetcher.py`); parser/no-text-layer failures quarantine
+  the source instead of returning 500 (`src/nornikel_kg/services/ingestion_service.py`).
+- Extracts entities/relations via dictionary alias-scan (always), optional GLiNER zero-shot NER
+  (`GLINER_ENABLED`, default `true`), and optional LLM guided-JSON extraction with an
+  `extraction_claims` audit trail (`src/nornikel_kg/services/extraction_service.py`), resolved
+  through `EntityResolutionService` (`src/nornikel_kg/services/entity_resolution.py`) and
+  materialized on demand as a NetworkX `MultiDiGraph`
+  (`src/nornikel_kg/services/graph_service.py`).
+- Retrieves via Qdrant hybrid dense+sparse search with RRF fusion
+  (`src/nornikel_kg/adapters/qdrant_index/index.py`, USER-bge-m3 dense +
+  fastembed/Qdrant-bm25 sparse in `src/nornikel_kg/adapters/embeddings/local.py`), gated by
+  `EMBEDDING_BACKEND=off|local|fake` and always rejoined/rechecked against DuckDB
+  (`src/nornikel_kg/services/retrieval_service.py`).
+- Synthesizes answers with an LLM composer that only cites `span_id`s from the evidence
+  packet, with one regeneration and a deterministic fallback
+  (`src/nornikel_kg/services/answer_composer.py`); every `/qa/ask` call is recorded to
+  `answer_runs` and replayable via `GET /qa/runs/{run_id}`.
+- Detects conflicts (`contradictory_direction`, `method_mismatch`, `numeric_disagreement > 15%`
+  under the same method) and computes a material x regime x property coverage/gap matrix
+  (`src/nornikel_kg/domain/analysis.py`, `GET /gaps/analyze`).
+- Ships a synthetic corpus v2 of 17 committed sources (4 CSV, 6 RU DOCX, 3 RU MD, 2 EN PDF,
+  1 image-only quarantine PDF, 1 HTML) under `sample_docs/synthetic_v2/` with a matching
+  `manifest.json`, generated deterministically by `scripts/generate_synthetic_docs.py`.
+
+`uv run pytest` passes **89 tests, 3 skipped** at `f4bf404` (skips are `docling`/`trafilatura`
+`importorskip` guards in `tests/integration/test_synthetic_v2_corpus.py` when those optional
+`ingest` extras are not installed); `uv run ruff check .` and `uv run mypy` report no issues.
 
 ## Contracts And Data
 
-Current P0 flow is: React/Vite workbench -> FastAPI `/qa/ask` -> DuckDB-backed evidence
-ledger -> deterministic evidence packet -> answer claim verification -> experiment table,
-evidence cards, graph path, conflict, gap, and evaluation/security metrics. Source upload flow is:
-React artifact bank -> FastAPI `/sources/upload` -> DuckDB source/evidence/fact writes ->
-`/sources` and `/sources/{source_id}/evidence` listing. Source lifecycle now also supports
-hard delete via `DELETE /sources/{source_id}` and validates upload filename, extension, MIME type,
-empty body, and size at API entry. Bundled web Nginx sets `client_max_body_size 6m`, while
-FastAPI enforces `MAX_SOURCE_UPLOAD_BYTES` (default 5242880 bytes).
-Qdrant, Docling/OCR, NetworkX, and LiteLLM are prepared as modular next adapters,
-not yet wired into the scaffold runtime.
-The workbench now exposes filter controls for `source_ids`, `material`, `property`, `regime`,
-`experiment_id`, and `regime_id`, and sends `AskFilters` with each `/qa/ask` request.
-`/qa/ask` honors typed request filters when selecting experiments, including `source_ids`,
-`source_id`, `material`/`material_name`, `property`/`property_name`, `regime`/`regime_id`,
-and `experiment_id`. Unknown filter keys are rejected at request validation.
-Free-text material tokens with explicit composition numbers are strict: if a query such as
-`Ni-20`, `ni 20`, or `Ni–20` does not match a known material token, QA returns no
-experiments/evidence and exposes nearby material follow-up queries instead of falling back to
-unrelated Ni-Cu rows. Known spaced material forms such as `Ni 30 Cu` and `Cu Ni 30` are scoped to
-their exact ledger materials.
+Full flow: React/Vite workbench -> FastAPI (`/sources/upload`, `/sources/import-url`,
+`/qa/ask`, `/entities/search`, `/entities/{id}`, `/graph/neighborhood`, `/graph/timeline`,
+`/gaps/analyze`, `/eval/summary`) -> DuckDB-backed evidence ledger + entity/relation graph ->
+optional Qdrant retrieval augmentation -> deterministic-or-LLM answer synthesis -> claim
+verification -> answer-run persistence.
 
-`.env.example` carries the open-weight LLM env matrix: `LLM_ENABLED`,
-`DATAEYES_API_BASE`/`DATAEYES_API_KEY`, `LLM_EXTRACTION_MODEL`/`LLM_ANSWER_MODEL` (blank
-pending W0.1 provider discovery, `.serena/plans/03_IMPLEMENTATION_PLAN.md` row 0.1),
-`EMBEDDING_BACKEND=local` with `EMBEDDING_MODEL_ID=deepvk/USER-bge-m3` and
-`SPARSE_MODEL_ID=Qdrant/bm25`, `HF_HOME`, `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`/
-`LANGFUSE_HOST`, `OLLAMA_BASE_URL`, and `MAX_SOURCE_UPLOAD_BYTES=26214400` as the sample value
-(the FastAPI code default in `services/api/routes/sources.py` is unchanged at `5242880`).
+Upload accepts `.csv`, `.md`, `.markdown`, `.txt`, `.text`, `.pdf`, `.docx` with filename/MIME/
+size validation (`services/api/routes/sources.py`); `MAX_SOURCE_UPLOAD_BYTES` code default is
+`5242880` bytes; bundled web Nginx sets `client_max_body_size 6m` and `proxy_read_timeout 300s`
+for `/api/` (`apps/web/nginx.conf`, needed for slow Docling/embedding-model cold starts).
 
 ## Invariants
 
 - Do not treat Markdown chunks as source of truth; they are convenience views only.
 - Every answer sentence must map to exact evidence IDs.
-- DuckDB is authoritative for P0 facts and provenance.
-- Qdrant is retrieval-only.
-- NetworkX is graph materialization-only.
-- React/Vite and FastAPI are P0, not P1.
+- DuckDB is authoritative for facts and provenance; if DuckDB and Qdrant disagree, DuckDB wins.
+- Qdrant is retrieval-only; NetworkX is graph materialization-only, rebuilt on demand from DuckDB.
+- React/Vite and FastAPI are P0 UI/API layers, not P1.
+- No OCR: PDFs without a text layer are quarantined, never OCR'd (`NoTextLayerError`).
+- Only `src/nornikel_kg/adapters/llm/gateway.py` may `import litellm`.
 
 ## Change Rules
 
@@ -99,9 +102,8 @@ Update this index whenever a new durable memory is added, renamed, split, or del
 
 ## Verification
 
-- `git diff --check`: verifies staged docs have no whitespace errors.
 - `make ci`: verifies backend ruff/mypy/pytest and frontend typecheck/build.
-- `make eval`: verifies fixture QA metrics.
+- `make eval`: runs `scripts/run_eval.py` (12 hardcoded `EVAL_QUESTIONS`).
 - `docker compose config`: verifies Compose syntax without requiring local secrets.
-- Targeted `rg` consistency scans over `README.md` and `.serena/newproj/nornikel-kg-search/`: verify old conflicting stack statements do not remain.
-- `uv run pytest`: 53 tests pass at HEAD (`1bca77f`); `uv run ruff check .` and `uv run mypy` report no issues.
+- `uv run pytest`: 89 tests pass, 3 skipped at `f4bf404`; `uv run ruff check .` and
+  `uv run mypy` report no issues.
