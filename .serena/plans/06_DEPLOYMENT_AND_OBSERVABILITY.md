@@ -69,7 +69,24 @@ curl -sS $DATAEYES_API_BASE/embeddings -d '{"model":"<emb?>","input":"тест"}
 ```
 
 Record results (catalog table, latency, RU quality notes, json_schema support) in
-this file under "Discovery Results" and pick model IDs. Known catalog snapshot
+this file under "Discovery Results" and pick model IDs.
+
+### Discovery Results (2026-07-02, partial — key invalid)
+
+- Correct LLM base URL is `https://platform.dataeyes.ai/v1` (unified global endpoint,
+  Bearer auth). `https://api.dataeyes.ai` is a separate Search & Reader product with
+  its own key — the `DATAEYES_API_BASE` default above is superseded.
+- The first owner-provided key was rejected by every endpoint
+  (`无效的令牌` on platform.dataeyes.ai / platform.shuyanai.com, `Invalid api key`
+  on api.shuyanai.com). Likely causes: key issued for the Search & Reader product,
+  not activated, or no balance. A new key from the "AI Models" console section is
+  required; catalog listing, json_schema smoke, and the model matrix remain blocked.
+- **Interim dev decision (owner, 2026-07-02):** `LLM_EXTRACTION_MODEL` and
+  `LLM_ANSWER_MODEL` are set to `openai/gpt-5.5-mini` in the server `.env` for
+  development only (`LLM_ENABLED=false` until a working key exists). This violates
+  the track's open-weight rule and MUST be replaced with a verified open-weight
+  model before demo freeze; the weights-openness gate in
+  `01_MVP_SCOPE_AND_DECISIONS.md` still applies to the final configuration. Known catalog snapshot
 (public site, 2026-07-02): open-weight-class entries DeepSeek V4 Pro, GLM 5.2,
 Kimi K2.7, MiniMax M3, ByteDance Seed 2.0; proprietary entries (GPT-5.5, Claude
 Opus 4.8, Gemini, Grok) are present in the same catalog and are FORBIDDEN for this
