@@ -75,8 +75,8 @@ class LLMAnswerComposer:
         prompt = self._packet_prompt(question, experiments, evidence)
 
         for attempt, extra in enumerate(
-            ("", "\nВНИМАНИЕ: предыдущий ответ содержал предложения без валидных "
-             "span_id из пакета. Используй только перечисленные span_id."),
+            ("", "\nВНИМАНИЕ: предыдущий ответ нарушил контракт. Верни СТРОГО объект "
+             '{"sentences": [...]} и используй только перечисленные span_id.'),
             start=1,
         ):
             try:
@@ -88,10 +88,17 @@ class LLMAnswerComposer:
                     trace_id=run_id,
                     tags=["qa"],
                 )
-                parsed = _ComposedAnswer.model_validate(result.content)
-            except (LLMError, ValidationError):
+            except LLMError:
                 logger.warning("LLM answer synthesis failed (attempt %s)", attempt, exc_info=True)
                 return fallback_summary, "deterministic"
+            try:
+                parsed = _ComposedAnswer.model_validate(result.content)
+            except ValidationError:
+                # Providers do not always enforce json_schema; one reminder retry.
+                logger.warning("LLM answer payload invalid (attempt %s)", attempt)
+                if attempt == 2:
+                    return fallback_summary, "deterministic"
+                continue
 
             kept: list[AnswerSentence] = []
             dropped = 0
@@ -124,7 +131,17 @@ class LLMAnswerComposer:
         experiments: list[ExperimentRow],
         evidence: list[EvidenceSpan],
     ) -> str:
-        lines = [f"Вопрос: {question}", "", "Пакет доказательств:"]
+        # The structure is spelled out in-prompt because not every provider
+        # enforces response_format json_schema.
+        lines = [
+            f"Вопрос: {question}",
+            "",
+            "Формат ответа — строго JSON-объект:",
+            '{"sentences": [{"sentence": "текст предложения",'
+            ' "supporting_span_ids": ["span_id из пакета"]}]}',
+            "",
+            "Пакет доказательств:",
+        ]
         for span in evidence[:30]:
             lines.append(f"- span_id={span.span_id}: {span.visible_text[:300]}")
         if experiments:
