@@ -587,6 +587,65 @@ class DuckDBLedgerRepository:
             for row in rows
         ]
 
+    def record_answer_run(
+        self,
+        *,
+        run_id: str,
+        question: str,
+        filters: dict[str, Any],
+        packet_stats: dict[str, Any],
+        model_id: str,
+        latency_ms: int,
+        verification: dict[str, Any],
+    ) -> None:
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            connection.execute(
+                """
+                INSERT INTO answer_runs (run_id, question, filters_json, packet_stats_json,
+                                         model_id, latency_ms, verification_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (run_id) DO UPDATE SET
+                  packet_stats_json = excluded.packet_stats_json,
+                  model_id = excluded.model_id,
+                  latency_ms = excluded.latency_ms,
+                  verification_json = excluded.verification_json
+                """,
+                [
+                    run_id,
+                    question,
+                    json.dumps(filters, ensure_ascii=False, sort_keys=True),
+                    json.dumps(packet_stats, ensure_ascii=False, sort_keys=True),
+                    model_id,
+                    latency_ms,
+                    json.dumps(verification, ensure_ascii=False, sort_keys=True),
+                ],
+            )
+
+    def get_answer_run(self, run_id: str) -> dict[str, Any] | None:
+        self.migrate()
+        with duckdb.connect(str(self.db_path)) as connection:
+            row = connection.execute(
+                """
+                SELECT run_id, question, filters_json, packet_stats_json, model_id,
+                       latency_ms, verification_json, created_at
+                FROM answer_runs WHERE run_id = ?
+                """,
+                [run_id],
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "run_id": str(row[0]),
+            "question": str(row[1]),
+            "filters": json.loads(str(row[2] or "{}")),
+            "packet_stats": json.loads(str(row[3] or "{}")),
+            "model_id": row[4],
+            "latency_ms": row[5],
+            "verification": json.loads(str(row[6] or "{}")),
+            "created_at": str(row[7]),
+        }
+
     def list_alias_index(self) -> list[tuple[str, str, str]]:
         """(alias_norm, entity_type, alias) triples for rule-based mention scanning."""
         self.migrate()

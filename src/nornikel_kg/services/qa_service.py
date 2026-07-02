@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import contextlib
 import re
+import time
 from difflib import SequenceMatcher
+from typing import Any, Protocol
 
 from nornikel_kg.domain.answer_claims import ClaimVerifier
 from nornikel_kg.domain.evidence import EvidenceSpanFactory
@@ -34,6 +37,46 @@ MATERIAL_SPACED_TOKEN_RE = re.compile(
 )
 
 
+class RetrievalServiceProtocol(Protocol):
+    def retrieve_span_ids(
+        self,
+        *,
+        question: str,
+        allowed_labels: list[str],
+        source_ids: list[str] | None = None,
+        top_k: int = 10,
+    ) -> list[str]:
+        """Hybrid-retrieval span candidates."""
+
+
+class AnswerComposerProtocol(Protocol):
+    def compose(
+        self,
+        *,
+        question: str,
+        experiments: list[ExperimentRow],
+        evidence: list[EvidenceSpan],
+        fallback_summary: list[AnswerSentence],
+        run_id: str,
+    ) -> tuple[list[AnswerSentence], str]:
+        """LLM answer synthesis with deterministic fallback."""
+
+
+class RunRecorderProtocol(Protocol):
+    def record_answer_run(
+        self,
+        *,
+        run_id: str,
+        question: str,
+        filters: dict[str, Any],
+        packet_stats: dict[str, Any],
+        model_id: str,
+        latency_ms: int,
+        verification: dict[str, Any],
+    ) -> None:
+        """Persist replayable answer-run metadata."""
+
+
 class DemoQAService:
     """Deterministic evidence-led QA over the current DuckDB ledger packet."""
 
@@ -44,13 +87,20 @@ class DemoQAService:
         claim_verifier: ClaimVerifier | None = None,
         source_label_policy: SourceLabelPolicy | None = None,
         ledger_repository: EvidenceLedgerPort | None = None,
+        retrieval_service: RetrievalServiceProtocol | None = None,
+        answer_composer: AnswerComposerProtocol | None = None,
+        run_recorder: RunRecorderProtocol | None = None,
     ) -> None:
         self.evidence_factory = evidence_factory or EvidenceSpanFactory()
         self.claim_verifier = claim_verifier or ClaimVerifier()
         self.source_label_policy = source_label_policy or SourceLabelPolicy()
         self.ledger_repository = ledger_repository
+        self.retrieval_service = retrieval_service
+        self.answer_composer = answer_composer
+        self.run_recorder = run_recorder
 
     def ask(self, request: AskRequest) -> AskResponse:
+        started = time.perf_counter()
         packet = self._load_packet()
         allowed_evidence = self.source_label_policy.filter_spans(packet.evidence)
         allowed_span_ids = {span.span_id for span in allowed_evidence}
@@ -69,6 +119,11 @@ class DemoQAService:
             if any(span_id in allowed_span_ids for span_id in experiment.evidence_ids)
         ]
         selected_evidence = self._evidence_for_experiments(allowed_evidence, selected_experiments)
+        selected_evidence = self._augment_with_retrieval(
+            request=request,
+            allowed_evidence=allowed_evidence,
+            selected_evidence=selected_evidence,
+        )
         graph_paths = [
             self._graph_path_for_experiment(experiment, selected_evidence)
             for experiment in selected_experiments
@@ -77,6 +132,16 @@ class DemoQAService:
             self._answer_sentence_for_experiment(experiment, graph_paths[index])
             for index, experiment in enumerate(selected_experiments)
         ]
+        run_id = f"qa_run_{stable_hash([request.question, request.language], 12)}"
+        answer_mode = "deterministic"
+        if self.answer_composer is not None and selected_evidence:
+            summary, answer_mode = self.answer_composer.compose(
+                question=request.question,
+                experiments=selected_experiments,
+                evidence=selected_evidence,
+                fallback_summary=summary,
+                run_id=run_id,
+            )
         verification = self.claim_verifier.verify(
             answer_summary=summary,
             evidence_spans=selected_evidence,
@@ -94,8 +159,8 @@ class DemoQAService:
             experiments=packet.experiments,
             unmatched_material_tokens=unmatched_material_tokens,
         )
-        return AskResponse(
-            run_id=f"qa_run_{stable_hash([request.question, request.language], 12)}",
+        response = AskResponse(
+            run_id=run_id,
             answer_summary=summary,
             confidence="high" if selected_experiments else "low",
             experiments=selected_experiments,
@@ -106,6 +171,55 @@ class DemoQAService:
             gaps=gaps if request.include_gaps else [],
             follow_up_queries=follow_up_queries,
         )
+        if self.run_recorder is not None:
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            # Run metadata must never break answers.
+            with contextlib.suppress(Exception):
+                self.run_recorder.record_answer_run(
+                    run_id=run_id,
+                    question=request.question,
+                    filters=request.filters.model_dump(exclude_none=True)
+                    if request.filters
+                    else {},
+                    packet_stats={
+                        "experiments": len(selected_experiments),
+                        "evidence": len(selected_evidence),
+                        "answer_mode": answer_mode,
+                    },
+                    model_id=answer_mode,
+                    latency_ms=latency_ms,
+                    verification=verification.model_dump(),
+                )
+        return response
+
+    def _augment_with_retrieval(
+        self,
+        *,
+        request: AskRequest,
+        allowed_evidence: list[EvidenceSpan],
+        selected_evidence: list[EvidenceSpan],
+    ) -> list[EvidenceSpan]:
+        if self.retrieval_service is None:
+            return selected_evidence
+        allowed_by_id = {span.span_id: span for span in allowed_evidence}
+        source_ids: list[str] | None = None
+        if request.filters and request.filters.source_ids:
+            source_ids = list(request.filters.source_ids)
+        try:
+            retrieved_ids = self.retrieval_service.retrieve_span_ids(
+                question=request.question,
+                allowed_labels=sorted(self.source_label_policy.allowed_labels),
+                source_ids=source_ids,
+            )
+        except Exception:  # retrieval degradation is silent by contract
+            return selected_evidence
+        present = {span.span_id for span in selected_evidence}
+        extras = [
+            allowed_by_id[span_id]
+            for span_id in retrieved_ids
+            if span_id in allowed_by_id and span_id not in present
+        ]
+        return selected_evidence + extras
 
     def _load_packet(self) -> EvidenceLedgerPacket:
         if self.ledger_repository is not None:
