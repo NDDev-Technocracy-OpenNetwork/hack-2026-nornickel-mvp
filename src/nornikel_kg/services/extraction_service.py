@@ -156,11 +156,16 @@ class ExtractionService:
     def _llm_mentions(self, source_id: str, span: EvidenceSpan) -> list[EntityMention]:
         assert self.llm is not None
         claim_key = "exc_" + stable_hash([source_id, span.span_id], 20)
+        format_hint = (
+            'Формат ответа — строго JSON-объект: {"entities": [{"text": "...", '
+            '"entity_type": "material|regime|property|equipment|team|person|laboratory'
+            '|conclusion|decision|value"}], "relations": []}'
+        )
         try:
             result = self.llm.generate_json(
                 task="extraction",
                 system_prompt=_EXTRACTION_SYSTEM_PROMPT,
-                user_prompt=f"Фрагмент источника:\n{span.visible_text}",
+                user_prompt=f"{format_hint}\n\nФрагмент источника:\n{span.visible_text}",
                 json_schema=dict(EXTRACTION_JSON_SCHEMA),
                 trace_id=claim_key,
                 tags=["ingest", source_id],
