@@ -1,7 +1,7 @@
 <!-- Memory Metadata
-Last updated: 2026-06-28
-Last commit: 259ecc6 feat: add react evidence workbench
-Scope: src/nornikel_kg/domain/security.py; src/nornikel_kg/domain/answer_claims.py; src/nornikel_kg/services/qa_service.py; tests/unit/test_source_label_policy.py; tests/unit/test_claim_verifier.py; eval/adversarial_questions.yml
+Last updated: 2026-07-02
+Last commit: 1bca77f Merge pull request #6 from rldyourmnd/feat/w0-alignment-and-seams
+Scope: src/nornikel_kg/domain/security.py; src/nornikel_kg/domain/answer_claims.py; src/nornikel_kg/services/qa_service.py; src/nornikel_kg/adapters/llm/; tests/unit/test_source_label_policy.py; tests/unit/test_claim_verifier.py; eval/adversarial_questions.yml
 Area: SEC
 -->
 
@@ -37,7 +37,7 @@ Prompt-like source content is untrusted evidence. It should be flagged during in
 ## Invariants
 
 - Never retrieve unauthorized chunks into LLM context and filter only after generation.
-- External LLM and embedding APIs are approved through LiteLLM/OpenAI-compatible providers, but secrets must never be committed or logged.
+- External LLM and embedding APIs are approved only through the single LiteLLM gateway adapter (`src/nornikel_kg/adapters/llm/gateway.py`) against open-weight catalog models (hackathon rules forbid OpenAI/Anthropic APIs; provider is `dataeyes.ai` via an OpenAI-compatible protocol, per `.env.example` and `mem:ARCH-01-EVIDENCE-MVP`), but secrets must never be committed or logged.
 - Runtime logs may include snippets during the hackathon, but never credentials.
 - Security fixtures must pass with `source_label_leak_count = 0` and `prompt_injection_success_count = 0`.
 

@@ -1,7 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-07-02
-Last commit: 1964e87 docs: sync instruction docs with MVP plan and LLM constraints
-Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml; .serena/plans/; .serena/reviews/
+Last commit: 1bca77f Merge pull request #6 from rldyourmnd/feat/w0-alignment-and-seams
+Scope: README.md; apps/web/; services/api/; src/nornikel_kg/; eval/; sample_docs/; tests/; docker-compose.yml; .github/workflows/ci.yml; .env.example; pyproject.toml; .serena/plans/; .serena/reviews/
 Area: CORE
 -->
 
@@ -44,7 +44,14 @@ Index the durable project knowledge for the Nornikel Materials KG Search hackath
 The repository contains a working P0 scaffold: FastAPI API, React/Vite workbench, DuckDB-backed
 evidence ledger, CSV/Markdown upload API, deterministic evidence-backed QA response,
 fixtures/eval, CI workflow, Docker Compose configuration, and deployment notes for
-`fa.nddev.asia`.
+`fa.nddev.asia`. `README.md` (commit `d5e61fa`) now documents the hackathon open-weight-only
+LLM rules and a new primary live stand at `https://nornikel.nddev.asia`, keeping
+`https://fa.nddev.asia` as an interim mirror. Wave W0 (merge commit `1bca77f`, PR #6) added a
+graph/knowledge schema migration (`src/nornikel_kg/adapters/duckdb/migrations/002_graph.sql`)
+with idempotent dictionary seeding, and an `LLMPort`/LiteLLM gateway
+(`src/nornikel_kg/ports/llm.py`, `src/nornikel_kg/adapters/llm/`) gated by `LLM_ENABLED`
+(default `false`, deterministic `FakeLLM`); neither is yet called from any ingestion or QA
+service.
 
 ## Contracts And Data
 
@@ -69,6 +76,14 @@ experiments/evidence and exposes nearby material follow-up queries instead of fa
 unrelated Ni-Cu rows. Known spaced material forms such as `Ni 30 Cu` and `Cu Ni 30` are scoped to
 their exact ledger materials.
 
+`.env.example` carries the open-weight LLM env matrix: `LLM_ENABLED`,
+`DATAEYES_API_BASE`/`DATAEYES_API_KEY`, `LLM_EXTRACTION_MODEL`/`LLM_ANSWER_MODEL` (blank
+pending W0.1 provider discovery, `.serena/plans/03_IMPLEMENTATION_PLAN.md` row 0.1),
+`EMBEDDING_BACKEND=local` with `EMBEDDING_MODEL_ID=deepvk/USER-bge-m3` and
+`SPARSE_MODEL_ID=Qdrant/bm25`, `HF_HOME`, `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`/
+`LANGFUSE_HOST`, `OLLAMA_BASE_URL`, and `MAX_SOURCE_UPLOAD_BYTES=26214400` as the sample value
+(the FastAPI code default in `services/api/routes/sources.py` is unchanged at `5242880`).
+
 ## Invariants
 
 - Do not treat Markdown chunks as source of truth; they are convenience views only.
@@ -89,3 +104,4 @@ Update this index whenever a new durable memory is added, renamed, split, or del
 - `make eval`: verifies fixture QA metrics.
 - `docker compose config`: verifies Compose syntax without requiring local secrets.
 - Targeted `rg` consistency scans over `README.md` and `.serena/newproj/nornikel-kg-search/`: verify old conflicting stack statements do not remain.
+- `uv run pytest`: 53 tests pass at HEAD (`1bca77f`); `uv run ruff check .` and `uv run mypy` report no issues.

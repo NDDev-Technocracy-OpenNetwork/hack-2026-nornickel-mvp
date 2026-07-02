@@ -1,7 +1,7 @@
 <!-- Memory Metadata
-Last updated: 2026-06-29
-Last commit: ad88521 test: expand exact material query regression coverage
-Scope: Makefile; tests/; scripts/run_eval.py; eval/; .github/workflows/ci.yml
+Last updated: 2026-07-02
+Last commit: 1bca77f Merge pull request #6 from rldyourmnd/feat/w0-alignment-and-seams
+Scope: Makefile; tests/; scripts/run_eval.py; eval/; .github/workflows/ci.yml; pyproject.toml
 Area: TEST
 -->
 
@@ -21,14 +21,14 @@ Capture required verification and acceptance gates for the MVP.
 
 - `eval/gold_questions.yml`: curated success/conflict/gap questions for the synthetic fixture.
 - `eval/adversarial_questions.yml`: prompt-injection and source-label fixture expectations.
-- `tests/unit/`: ID stability, claim verifier, and source-label policy tests.
+- `tests/unit/`: ID stability, claim verifier, source-label policy, dictionary-loader, and LLM gateway tests.
 - `tests/integration/`: FastAPI and DuckDB ledger tests.
 - `make ci`: local backend/frontend quality gate matching the current CI workflow.
 - `make eval`: deterministic fixture evaluation smoke.
 
 ## Current Behavior
 
-The scaffold has executable gates. `make ci` runs backend ruff/mypy/pytest and frontend TypeScript/build. `scripts/run_eval.py` uses the runtime QA service and synthetic DuckDB ledger to verify citation and safety metrics for the ideal question, missing-conductivity gap, and method-mismatch conflict. CI runs the same backend and frontend checks on pull requests and pushes to `main`.
+The scaffold has executable gates. `make ci` runs backend ruff/mypy/pytest and frontend TypeScript/build. `scripts/run_eval.py` uses the runtime QA service and synthetic DuckDB ledger to verify citation and safety metrics for the ideal question, missing-conductivity gap, and method-mismatch conflict. CI runs the same backend and frontend checks on pull requests and pushes to `main`. At `1bca77f`, `uv run pytest` passes 53 tests and `uv run ruff check .` / `uv run mypy` report no issues.
 
 ## Contracts And Data
 
@@ -55,6 +55,16 @@ API contracts around source lifecycle now include:
   return deterministic 400/413 API errors.
 - `/sources/{source_id}/evidence` returns 404 for missing source.
 
+`tests/unit/test_llm_gateway.py` covers: `build_llm()` returning `FakeLLM` when `LLM_ENABLED`
+is unset/false; `FakeLLM` determinism and queued/canned response behavior; `LiteLLMGateway`
+parsing guided JSON responses and charging its `TokenBudget`; rejection of non-JSON and
+non-object completions; the `TokenBudget` hard stop; missing per-task model configuration
+raising `ValueError`; and a repo-wide guard (`test_litellm_imported_only_inside_llm_adapter`)
+that no module outside `src/nornikel_kg/adapters/llm` imports `litellm`.
+`tests/unit/test_dictionary_loader.py` covers `canonical_key()` normalization rules and the
+`load_dictionaries()`/`resolve_alias()` seeding/idempotency/alias-resolution behavior described
+in `mem:DATA-01-EVIDENCE-LEDGER`.
+
 ## Invariants
 
 - Do not mark a demo answer successful if unsupported final sentences exist.
@@ -67,7 +77,7 @@ When new ingestion/retrieval behavior is added, extend `eval/gold_questions.yml`
 
 ## Verification
 
-- `make ci`: ruff, mypy, pytest, frontend typecheck, frontend build.
+- `make ci`: ruff, mypy, pytest (53 tests at `1bca77f`), frontend typecheck, frontend build.
 - `make eval`: 9-case fixture QA metrics, including screenshot-style `ni-20` no-result,
   spaced/unicode material variants, exact scoped known materials, and family temperature query.
 - `docker compose config`: Compose validation.

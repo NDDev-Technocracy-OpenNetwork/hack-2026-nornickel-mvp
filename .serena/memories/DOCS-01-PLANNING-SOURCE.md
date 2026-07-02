@@ -1,7 +1,7 @@
 <!-- Memory Metadata
 Last updated: 2026-07-02
-Last commit: 1964e87 docs: sync instruction docs with MVP plan and LLM constraints
-Scope: README.md; .serena/newproj/nornikel-kg-search/; .serena/plans/; .serena/reviews/
+Last commit: 1bca77f Merge pull request #6 from rldyourmnd/feat/w0-alignment-and-seams
+Scope: README.md; .serena/newproj/nornikel-kg-search/; .serena/plans/; .serena/reviews/; .env.example
 Area: DOCS
 -->
 
@@ -13,7 +13,7 @@ Capture how to use and maintain the planning package before implementation scaff
 
 ## Source Of Truth
 
-- `.serena/newproj/nornikel-kg-search/01_RESEARCH_SUMMARY.md`: source-backed research summary.
+- `.serena/newproj/nornikel-kg-search/01_HLO.md`: source-backed research summary (high-level overview).
 - `.serena/newproj/nornikel-kg-search/02_REQUIREMENTS.md`: product requirements.
 - `.serena/newproj/nornikel-kg-search/03_ARCHITECTURE.md`: broad system architecture.
 - `.serena/newproj/nornikel-kg-search/04_ADRS.md`: decisions.
@@ -48,12 +48,22 @@ W0-W5 to the ~2026-07-16 deadline (Docling text-layer ingest, GLiNER+LLM extract
 entity resolution, Qdrant hybrid retrieval, own graph layer in DuckDB+NetworkX, gaps/conflicts,
 graph UI, x10 synthetic corpus, Langfuse self-host observability, new-server rollout).
 
+Wave W0 (commits `d5e61fa`, `12b8cd6`, `e98c2e2`, `432044a`; merged as `1bca77f`, PR #6) closed
+several planning-to-code gaps: `.env.example` now carries the full open-weight LLM/embedding/
+Langfuse env matrix; `19_OWNER_DECISIONS.md`, `05_TECH_STACK.md`, and `08_INFRA.md` each carry a
+dated 2026-07-02 amendment note superseding the earlier `openai/gpt-5.5-mini` /
+`openai/text-embedding-3-large` defaults; and `README.md` documents the hackathon LLM rules plus
+the new live stand `https://nornikel.nddev.asia` (`https://fa.nddev.asia` kept as an interim
+mirror). `docs/deployment/fa-nddev.md` was not updated in this wave and still references the
+withdrawn `OPENAI_API_KEY`/`LITELLM_API_BASE` env names (see `mem:TECHDEBT-01-NOW`).
+
 ## Contracts And Data
 
 Repository artifacts are written in English. User-facing conversation remains Russian unless the owner requests otherwise.
 Current instruction docs also record the `/sources/upload` runtime limit contract:
-`MAX_SOURCE_UPLOAD_BYTES` defaults to 5242880 bytes, and bundled web Nginx uses
-`client_max_body_size 6m`.
+`MAX_SOURCE_UPLOAD_BYTES` code default is `5242880` bytes (`services/api/routes/sources.py`),
+while `.env.example` now samples `26214400`, and bundled web Nginx uses
+`client_max_body_size 6m` (see `mem:TECHDEBT-01-NOW` for the resulting size-limit mismatch).
 
 ## Invariants
 
