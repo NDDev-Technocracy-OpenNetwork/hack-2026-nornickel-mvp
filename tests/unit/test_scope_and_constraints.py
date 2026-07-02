@@ -83,10 +83,10 @@ def test_publication_and_authors_linked(repository: DuckDBLedgerRepository) -> N
 
 def test_geography_and_year_scope_filters(repository: DuckDBLedgerRepository) -> None:
     csv_content = (
-        "experiment_id,material,regime,temperature_c,duration_h,atmosphere,"
-        "property,method,baseline_value,treated_value,unit,effect\n"
-        "exp_scope,Ni-30Cu,aging,700,8,air,Vickers hardness,HV10,210,245,HV,increase\n"
-    ).encode()
+        b"experiment_id,material,regime,temperature_c,duration_h,atmosphere,"
+        b"property,method,baseline_value,treated_value,unit,effect\n"
+        b"exp_scope,Ni-30Cu,aging,700,8,air,Vickers hardness,HV10,210,245,HV,increase\n"
+    )
     response = repository.ingest_source_bytes(filename="scope.csv", content=csv_content)
     source_id = response.source.source_id
     repository.set_source_metadata(source_id, year=2015, geography="foreign")
@@ -115,11 +115,11 @@ def test_geography_and_year_scope_filters(repository: DuckDBLedgerRepository) ->
 
 def test_numeric_constraint_filters_experiments(repository: DuckDBLedgerRepository) -> None:
     csv_content = (
-        "experiment_id,material,regime,temperature_c,duration_h,atmosphere,"
-        "property,method,baseline_value,treated_value,unit,effect\n"
-        "exp_low,Ni-30Cu,aging,700,8,air,Vickers hardness,HV10,210,245,HV,increase\n"
-        "exp_high,Ni-30Cu,aging,700,8,air,Vickers hardness,HV10,210,320,HV,increase\n"
-    ).encode()
+        b"experiment_id,material,regime,temperature_c,duration_h,atmosphere,"
+        b"property,method,baseline_value,treated_value,unit,effect\n"
+        b"exp_low,Ni-30Cu,aging,700,8,air,Vickers hardness,HV10,210,245,HV,increase\n"
+        b"exp_high,Ni-30Cu,aging,700,8,air,Vickers hardness,HV10,210,320,HV,increase\n"
+    )
     repository.ingest_source_bytes(filename="constraints.csv", content=csv_content)
     service = DemoQAService(ledger_repository=repository, run_recorder=repository)
     response = service.ask(

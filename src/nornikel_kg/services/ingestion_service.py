@@ -186,6 +186,11 @@ class IngestionService:
         )
         return self._response_for(source_id)
 
+    def enrich_source(self, source_id: str) -> None:
+        """(Re)run the enrichment stage for an already-parsed source."""
+        self._record_run(source_id=source_id, status="running", stage="extraction")
+        self._schedule_enrichment(source_id, base_counters={})
+
     def _apply_source_metadata(
         self, source_id: str, filename: str, parsed: ParsedDocument
     ) -> None:

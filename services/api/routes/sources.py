@@ -173,6 +173,20 @@ def import_url(request: ImportUrlRequest) -> SourceIngestResponse:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
 
+@router.post("/{source_id}/enrich")
+def enrich_source(source_id: str) -> dict[str, object]:
+    """(Re)run extraction+indexing for a source.
+
+    Recovery path for runs stuck in `running` after a restart, and the way to
+    re-enrich after dictionary upgrades.
+    """
+    repository = get_ledger_repository()
+    if repository.get_source(source_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
+    get_ingestion_service().enrich_source(source_id)
+    return {"source_id": source_id, "scheduled": True}
+
+
 @router.get("/{source_id}/runs")
 def list_source_runs(source_id: str) -> dict[str, list[dict[str, object]]]:
     repository = get_ledger_repository()
