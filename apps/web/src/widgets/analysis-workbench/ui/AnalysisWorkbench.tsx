@@ -16,7 +16,9 @@ import { defaultQuestion } from "@/shared/i18n/ru";
 import { Panel } from "@/shared/ui";
 import { ArtifactBankPanel, EvidenceList } from "@/widgets/artifact-bank";
 import { EvaluationDashboard } from "@/widgets/evaluation-dashboard";
-import { GraphView } from "@/widgets/graph-view";
+import { GapsBoard } from "@/widgets/gaps-board";
+import { GraphNeighborhoodPanel, GraphView } from "@/widgets/graph-view";
+import { DecisionsTimeline } from "@/widgets/timeline";
 
 export function AnalysisWorkbench() {
   const [answer, setAnswer] = useState<AskResponse | null>(null);
@@ -369,6 +371,14 @@ export function AnalysisWorkbench() {
           onDelete={handleDeleteSource}
           sources={sources}
         />
+        <GraphNeighborhoodPanel />
+        <GapsBoard
+          onGapQuery={(gapQuestion) => {
+            setQuestion(gapQuestion);
+            void handleSubmit(gapQuestion);
+          }}
+        />
+        <DecisionsTimeline />
         {answer ? (
           <>
             {answer.evidence.length > 0 ? <EvidenceList evidence={answer.evidence} /> : null}

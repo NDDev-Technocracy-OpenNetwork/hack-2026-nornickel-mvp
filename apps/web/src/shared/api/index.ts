@@ -1,10 +1,27 @@
-export { askQuestion, deleteSource, importUrl, listSources, uploadSource } from "./client";
+export {
+  analyzeGaps,
+  askQuestion,
+  deleteSource,
+  fetchNeighborhood,
+  fetchTimeline,
+  importUrl,
+  listSources,
+  searchEntities,
+  uploadSource,
+} from "./client";
 export type {
   AskResponse,
+  EntitySearchResult,
   EvidenceSpan,
   ExperimentRow,
   AskFilters,
+  GapCell,
+  GapsAnalysis,
+  GraphEdge,
+  GraphNeighborhood,
+  GraphNode,
   GraphPath,
   SourceIngestResponse,
   SourceSummary,
+  TimelineEvent,
 } from "./types";

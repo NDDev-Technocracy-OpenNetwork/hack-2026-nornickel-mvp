@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
+import time
 from pathlib import Path
 
 from nornikel_kg.domain.models import AskRequest
@@ -97,6 +99,7 @@ EVAL_QUESTIONS = [
 
 
 def main() -> None:
+    original_db_path = os.environ.get("DUCKDB_PATH", "data/catalog.duckdb")
     with tempfile.TemporaryDirectory() as temp_dir:
         os.environ["DUCKDB_PATH"] = str(Path(temp_dir) / "catalog.duckdb")
         get_ledger_repository.cache_clear()
@@ -173,6 +176,26 @@ def main() -> None:
             "cases": cases,
         }
         print(json.dumps(result, ensure_ascii=False, indent=2))
+        if "--store" in sys.argv:
+            # Persist per-question metrics into the RUNTIME ledger (not the temp
+            # eval DB) so /eval/summary serves real numbers from the last run.
+            os.environ["DUCKDB_PATH"] = original_db_path
+            get_ledger_repository.cache_clear()
+            get_qa_service.cache_clear()
+            eval_run_id = f"eval_{int(time.time())}"
+            repository = get_ledger_repository()
+            for case in cases:
+                metrics = {
+                    key: value
+                    for key, value in case.items()
+                    if isinstance(value, int | float) and not isinstance(value, bool)
+                }
+                repository.store_eval_result(
+                    run_id=eval_run_id,
+                    question_id=str(case["question_id"]),
+                    metrics=metrics,
+                )
+            print(f"stored eval run {eval_run_id} ({len(cases)} questions)")
         if failed_cases:
             raise SystemExit(1)
 

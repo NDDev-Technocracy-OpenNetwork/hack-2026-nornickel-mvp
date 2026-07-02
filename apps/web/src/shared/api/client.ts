@@ -1,8 +1,12 @@
 import type {
   AskFilters,
   AskResponse,
+  EntitySearchResult,
+  GapsAnalysis,
+  GraphNeighborhood,
   SourceIngestResponse,
   SourceSummary,
+  TimelineEvent,
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
@@ -150,4 +154,48 @@ export async function deleteSource(sourceId: string): Promise<{ source_id: strin
   }
 
   return (await response.json()) as { source_id: string; deleted: boolean };
+}
+
+export async function fetchNeighborhood(
+  entityId: string,
+  depth = 1,
+  limit = 100,
+): Promise<GraphNeighborhood> {
+  const params = new URLSearchParams({
+    entity_id: entityId,
+    depth: String(depth),
+    limit: String(limit),
+  });
+  const response = await fetch(`${API_BASE_URL}/graph/neighborhood?${params}`);
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "Neighborhood request failed"));
+  }
+  return (await response.json()) as GraphNeighborhood;
+}
+
+export async function searchEntities(query: string): Promise<EntitySearchResult[]> {
+  const params = new URLSearchParams({ q: query });
+  const response = await fetch(`${API_BASE_URL}/entities/search?${params}`);
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "Entity search failed"));
+  }
+  const payload = (await response.json()) as { entities: EntitySearchResult[] };
+  return payload.entities;
+}
+
+export async function analyzeGaps(): Promise<GapsAnalysis> {
+  const response = await fetch(`${API_BASE_URL}/gaps/analyze`);
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "Gaps analysis failed"));
+  }
+  return (await response.json()) as GapsAnalysis;
+}
+
+export async function fetchTimeline(): Promise<TimelineEvent[]> {
+  const response = await fetch(`${API_BASE_URL}/graph/timeline`);
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "Timeline request failed"));
+  }
+  const payload = (await response.json()) as { events: TimelineEvent[] };
+  return payload.events;
 }
