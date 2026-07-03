@@ -703,6 +703,69 @@ class DuckDBLedgerRepository:
                 ],
             )
 
+    def corpus_stats(self) -> dict[str, Any]:
+        """Aggregate corpus/graph counters for the UI overview."""
+        self.migrate()
+        with self._connect() as connection:
+            scalars = {
+                "sources": "SELECT COUNT(*) FROM sources",
+                "evidence_spans": "SELECT COUNT(*) FROM evidence_spans",
+                "measurements": "SELECT COUNT(*) FROM property_measurements",
+                "relations": "SELECT COUNT(*) FROM relations",
+                "answer_runs": "SELECT COUNT(*) FROM answer_runs",
+            }
+            stats: dict[str, Any] = {
+                name: int(connection.execute(query).fetchone()[0])  # type: ignore[index]
+                for name, query in scalars.items()
+            }
+            stats["entities_by_type"] = {
+                str(row[0]): int(row[1])
+                for row in connection.execute(
+                    "SELECT entity_type, COUNT(*) FROM entities "
+                    "GROUP BY entity_type ORDER BY COUNT(*) DESC"
+                ).fetchall()
+            }
+            stats["relations_by_type"] = {
+                str(row[0]): int(row[1])
+                for row in connection.execute(
+                    "SELECT relation_type, COUNT(*) FROM relations "
+                    "GROUP BY relation_type ORDER BY COUNT(*) DESC"
+                ).fetchall()
+            }
+            stats["security_labels"] = {
+                str(row[0]): int(row[1])
+                for row in connection.execute(
+                    "SELECT security_label, COUNT(*) FROM sources "
+                    "GROUP BY security_label ORDER BY COUNT(*) DESC"
+                ).fetchall()
+            }
+        return stats
+
+    def list_answer_runs(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Most recent answer runs (audit trail for the security page)."""
+        self.migrate()
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT run_id, question, model_id, latency_ms, verification_json, created_at
+                FROM answer_runs
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                [limit],
+            ).fetchall()
+        return [
+            {
+                "run_id": str(row[0]),
+                "question": str(row[1]),
+                "answer_mode": row[2],
+                "latency_ms": row[3],
+                "verification": json.loads(str(row[4] or "{}")),
+                "created_at": str(row[5]),
+            }
+            for row in rows
+        ]
+
     def get_answer_run(self, run_id: str) -> dict[str, Any] | None:
         self.migrate()
         with self._connect() as connection:
