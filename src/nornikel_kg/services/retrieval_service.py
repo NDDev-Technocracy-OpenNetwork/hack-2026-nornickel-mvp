@@ -10,7 +10,10 @@ from nornikel_kg.ports.retrieval import IndexableUnit, VectorIndexPort
 logger = logging.getLogger(__name__)
 
 EVIDENCE_COLLECTION = os.getenv("QDRANT_COLLECTION", "evidence_units")
-ENTITY_COLLECTION = "entities"
+# Entity vectors must live in a collection matching the active embedder's
+# dimensionality — deriving the name from the evidence collection means an
+# embedder switch (new QDRANT_COLLECTION) never queries stale-dim vectors.
+ENTITY_COLLECTION = os.getenv("QDRANT_ENTITY_COLLECTION", f"{EVIDENCE_COLLECTION}_entities")
 
 
 class RerankerPort(Protocol):

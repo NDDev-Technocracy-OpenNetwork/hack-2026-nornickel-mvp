@@ -42,7 +42,7 @@ class YandexEmbeddingBackend:
         folder_id: str | None = None,
         doc_model: str | None = None,
         query_model: str | None = None,
-        max_workers: int = 8,
+        max_workers: int | None = None,
     ) -> None:
         self.api_key: str = api_key if api_key else os.getenv("YANDEX_API_KEY", "")
         self.folder_id: str = folder_id if folder_id else os.getenv("YANDEX_FOLDER_ID", "")
@@ -52,7 +52,9 @@ class YandexEmbeddingBackend:
         query = query_model or os.getenv("YANDEX_EMBED_QUERY_MODEL", _DEFAULT_MODEL)
         self.doc_model_uri = f"emb://{self.folder_id}/{doc}"
         self.query_model_uri = f"emb://{self.folder_id}/{query}"
-        self.max_workers = max_workers
+        # The folder quota (10 RPS) is shared across ALL callers — concurrent
+        # enrichment threads each spinning 8 workers produced a 429 storm.
+        self.max_workers = max_workers or int(os.getenv("YANDEX_EMBED_MAX_WORKERS", "4"))
 
     # -- dense (API) --------------------------------------------------------
 

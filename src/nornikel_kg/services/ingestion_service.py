@@ -278,8 +278,22 @@ class IngestionService:
         """
 
         def enrich() -> None:
+            # The whole body is guarded: an unhandled error here would kill
+            # the daemon thread silently and strand the run in «running»
+            # forever (observed live with a litellm dependency error).
             counters = dict(base_counters)
-            counters.update(self._run_extraction(source_id))
+            try:
+                counters.update(self._run_extraction(source_id))
+            except Exception as error:
+                logger.exception("Enrichment failed for %s", source_id)
+                self._record_run(
+                    source_id=source_id,
+                    status="failed",
+                    stage="extraction",
+                    error=repr(error)[:500],
+                    counters=counters,
+                )
+                return
             self._record_run(
                 source_id=source_id,
                 status="completed",
