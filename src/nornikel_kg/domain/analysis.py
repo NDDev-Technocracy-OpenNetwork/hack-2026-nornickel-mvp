@@ -4,17 +4,24 @@ import re
 from typing import Any
 
 from nornikel_kg.domain.models import ExperimentRow
+from nornikel_kg.domain.quantities import normalize_unit
 
 _NUMERIC_CONFLICT_THRESHOLD = 0.15
 _DIRECTIONS = {"increase", "decrease"}
 
 
 def _regime_bucket(experiment: ExperimentRow) -> str:
-    """Coarse regime key: type + rounded temperature, so near-identical regimes compare."""
+    """Regime key: regime TYPE + temperature, so only near-identical regimes compare.
+
+    The type must survive the `reg_`/`regime_` id prefix (audit H4: splitting
+    the raw id put every experiment into one `reg:` bucket, so aging and
+    annealing at the same temperature produced fake contradictions).
+    """
     regime = experiment.regime_id or experiment.regime_summary
-    match = re.search(r"(\d{2,4})", regime)
+    token = regime.removeprefix("reg_").removeprefix("regime_")
+    match = re.search(r"(\d{2,4})", token)
     temperature = match.group(1) if match else ""
-    prefix = re.split(r"[_\d]", regime, maxsplit=1)[0]
+    prefix = re.split(r"[_\d]", token, maxsplit=1)[0]
     return f"{prefix}:{temperature}"
 
 
@@ -106,10 +113,14 @@ class ConflictDetector:
                     "невозможно."
                 ),
             }
+        left_unit = normalize_unit(str(left.measurement.get("unit") or ""))
+        right_unit = normalize_unit(str(right.measurement.get("unit") or ""))
         if (
             left_value is not None
             and right_value is not None
+            and left_method
             and left_method == right_method
+            and left_unit == right_unit
             and max(abs(left_value), abs(right_value)) > 0
         ):
             delta = abs(left_value - right_value) / max(abs(left_value), abs(right_value))

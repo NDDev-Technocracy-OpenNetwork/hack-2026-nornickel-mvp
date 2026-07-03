@@ -1096,10 +1096,64 @@ class DuckDBLedgerRepository:
         connection: duckdb.DuckDBPyConnection,
         source_id: str,
     ) -> None:
+        """Cascade delete: no graph row may keep citing removed spans.
+
+        Relations/entities strip the deleted span ids from their evidence;
+        rows whose evidence empties out are removed (dictionary-seeded
+        entities stay — their ids are stable and reseeded by migrations).
+        """
+        deleted_span_ids = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT span_id FROM evidence_spans WHERE source_id = ?", [source_id]
+            ).fetchall()
+        }
         connection.execute("DELETE FROM property_measurements WHERE source_id = ?", [source_id])
         connection.execute("DELETE FROM effect_claims WHERE source_id = ?", [source_id])
         connection.execute("DELETE FROM evidence_spans WHERE source_id = ?", [source_id])
         connection.execute("DELETE FROM sources WHERE source_id = ?", [source_id])
+        connection.execute("DELETE FROM extraction_claims WHERE source_id = ?", [source_id])
+        connection.execute("DELETE FROM ingestion_runs WHERE source_id = ?", [source_id])
+        if not deleted_span_ids:
+            return
+        for row in connection.execute(
+            "SELECT relation_id, evidence_span_ids_json FROM relations"
+        ).fetchall():
+            span_ids: list[str] = json.loads(str(row[1] or "[]"))
+            kept = [span_id for span_id in span_ids if span_id not in deleted_span_ids]
+            if len(kept) == len(span_ids):
+                continue
+            if kept:
+                connection.execute(
+                    "UPDATE relations SET evidence_span_ids_json = ? WHERE relation_id = ?",
+                    [json.dumps(kept, ensure_ascii=False), str(row[0])],
+                )
+            else:
+                connection.execute(
+                    "DELETE FROM relations WHERE relation_id = ?", [str(row[0])]
+                )
+        for row in connection.execute(
+            "SELECT entity_id, evidence_span_ids_json FROM entities"
+        ).fetchall():
+            entity_id = str(row[0])
+            span_ids = json.loads(str(row[1] or "[]"))
+            kept = [span_id for span_id in span_ids if span_id not in deleted_span_ids]
+            if len(kept) == len(span_ids):
+                continue
+            if kept or not entity_id.startswith("ent_"):
+                connection.execute(
+                    "UPDATE entities SET evidence_span_ids_json = ? WHERE entity_id = ?",
+                    [json.dumps(kept, ensure_ascii=False), entity_id],
+                )
+            else:
+                connection.execute(
+                    "DELETE FROM relations WHERE src_entity_id = ? OR dst_entity_id = ?",
+                    [entity_id, entity_id],
+                )
+                connection.execute(
+                    "DELETE FROM entity_aliases WHERE entity_id = ?", [entity_id]
+                )
+                connection.execute("DELETE FROM entities WHERE entity_id = ?", [entity_id])
 
     def _find_source(
         self,

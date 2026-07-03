@@ -4,7 +4,7 @@ import contextlib
 import re
 import time
 from difflib import SequenceMatcher
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from nornikel_kg.domain.answer_claims import ClaimVerifier
 from nornikel_kg.domain.evidence import EvidenceSpanFactory
@@ -27,6 +27,15 @@ from nornikel_kg.ports.ledger import EvidenceLedgerPort
 
 MATERIAL_ELEMENTS = frozenset({"ni", "cu", "cr", "mo", "al", "fe", "co", "mn", "ti"})
 MATERIAL_TOKEN_RE = re.compile(r"\b[a-z]{1,8}\d{1,3}[a-z0-9]*\b", re.IGNORECASE)
+# Alloy codes are element-symbol sequences with digits; anything else («CO2»,
+# «Al2O3», «section3») is NOT a requested material (audit C4: such tokens
+# silently blanked whole answers).
+_ALLOY_TOKEN_RE = re.compile(
+    r"(?:(?:ni|cu|cr|mo|al|fe|co|mn|ti))+\d{1,3}(?:(?:ni|cu|cr|mo|al|fe|co|mn|ti)|\d)*"
+)
+_CHEMICAL_FORMULA_VETO = frozenset(
+    {"co2", "co3", "al2", "mn2", "fe2", "fe3", "ti2", "cu2", "ni2"}
+)
 MATERIAL_ELEMENT_PATTERN = r"(?:ni|cu|cr|mo|al|fe|co|mn|ti)"
 MATERIAL_SEPARATOR_PATTERN = r"[\s\-_/–—]*"
 MATERIAL_SPACED_TOKEN_RE = re.compile(
@@ -59,6 +68,7 @@ class AnswerComposerProtocol(Protocol):
         evidence: list[EvidenceSpan],
         fallback_summary: list[AnswerSentence],
         run_id: str,
+        source_context: dict[str, str] | None = None,
     ) -> tuple[list[AnswerSentence], str]:
         """LLM answer synthesis with deterministic fallback."""
 
@@ -149,13 +159,16 @@ class DemoQAService:
                 evidence=selected_evidence,
                 fallback_summary=summary,
                 run_id=run_id,
+                source_context=self._source_context(packet, selected_evidence),
             )
         verification = self.claim_verifier.verify(
             answer_summary=summary,
             evidence_spans=selected_evidence,
             source_label_policy=self.source_label_policy,
         )
-        conflicts = self._conflicts_for_question(request.question, packet.conflicts)
+        conflicts = self._conflicts_for_question(
+            request.question, packet.conflicts, selected_experiments
+        )
         gaps = self._gaps_for_question(
             question=request.question,
             packet_gaps=packet.gaps,
@@ -170,7 +183,7 @@ class DemoQAService:
         response = AskResponse(
             run_id=run_id,
             answer_summary=summary,
-            confidence="high" if selected_experiments else "low",
+            confidence=self._confidence_level(request.question, selected_experiments),
             experiments=selected_experiments,
             evidence=selected_evidence,
             graph_paths=graph_paths if request.include_graph else [],
@@ -433,17 +446,26 @@ class DemoQAService:
         normalized_question = self._normalize(question)
         requested_property = self._requested_property(question)
         has_request_filters = self._has_filter_constraints(request_filters)
-        if self._unmatched_material_tokens(question=question, experiments=experiments):
-            return []
         requested_material_tokens = self._requested_material_tokens(question)
         known_material_tokens = self._known_material_tokens(experiments)
+        matched_tokens = requested_material_tokens.intersection(known_material_tokens)
+        # Per-token honesty (audit M17/C4): unknown materials drop out, but a
+        # comparison question keeps its known half; all-unknown means an
+        # honest empty answer (gaps/follow-ups explain why).
+        if requested_material_tokens and not matched_tokens:
+            return []
         exact_materials = {
             self._normalize_material_token(experiment.material_name)
             for experiment in experiments
             if self._normalize_material_token(experiment.material_name)
             and self._normalize_material_token(experiment.material_name) in normalized_question
         }
-        exact_materials.update(requested_material_tokens.intersection(known_material_tokens))
+        exact_materials.update(matched_tokens)
+        # Question-side alias resolution: «МН30» is the Russian designation of
+        # CuNi30 — the entity alias table, not string similarity, decides.
+        exact_materials.update(
+            self._alias_material_tokens(question).intersection(known_material_tokens)
+        )
         filtered_experiments: list[ExperimentRow] = []
         scored: list[tuple[int, ExperimentRow]] = []
         for experiment in experiments:
@@ -462,9 +484,21 @@ class DemoQAService:
             if score > 0:
                 scored.append((score, experiment))
         if not scored and not requested_property:
+            if exact_materials:
+                # A material was explicitly requested and matched — that IS
+                # the signal, even when no regime/property keyword scored.
+                return [
+                    experiment
+                    for experiment in filtered_experiments
+                    if self._normalize_material_token(experiment.material_name)
+                    in exact_materials
+                ][:5]
             if has_request_filters:
+                # The user scoped explicitly — the scope itself is the query.
                 return filtered_experiments[:5]
-            return experiments[:5]
+            # No signal matched: an honest empty beats five arbitrary rows
+            # presented as an answer (audit C1).
+            return []
         scored.sort(key=lambda item: (-item[0], item[1].experiment_id))
         return [experiment for _, experiment in scored[:5]]
 
@@ -674,17 +708,82 @@ class DemoQAService:
             graph_path_ids=[graph_path.path_id],
         )
 
+    def _source_context(
+        self,
+        packet: EvidenceLedgerPacket,
+        selected_evidence: list[EvidenceSpan],
+    ) -> dict[str, str]:
+        """source_id -> «Title, 2019, ru» labels for literature-review grouping."""
+        metadata: dict[str, dict[str, Any]] = {}
+        if self.run_recorder is not None:
+            with contextlib.suppress(Exception):
+                metadata = self.run_recorder.source_metadata()
+        context: dict[str, str] = {}
+        for span in selected_evidence:
+            if span.source_id in context:
+                continue
+            parts = [packet.source_titles.get(span.source_id, "")[:80]]
+            meta = metadata.get(span.source_id, {})
+            if meta.get("year"):
+                parts.append(str(meta["year"]))
+            if meta.get("geography"):
+                parts.append(str(meta["geography"]))
+            label = ", ".join(part for part in parts if part)
+            if label:
+                context[span.source_id] = label
+        return context
+
+    def _confidence_level(
+        self,
+        question: str,
+        selected_experiments: list[ExperimentRow],
+    ) -> Literal["low", "medium", "high"]:
+        """Honest confidence: high only when the question's material/property
+        signal actually matched the selected data (audit C1: the old binary
+        «high if non-empty» presented arbitrary rows as trustworthy)."""
+        if not selected_experiments:
+            return "low"
+        requested_tokens = self._requested_material_tokens(question)
+        matched_material = requested_tokens.intersection(
+            self._known_material_tokens(selected_experiments)
+        )
+        if matched_material or self._requested_property(question):
+            return "high"
+        return "medium"
+
     def _conflicts_for_question(
         self,
         question: str,
         conflicts: list[dict[str, object]],
+        selected_experiments: list[ExperimentRow],
     ) -> list[dict[str, object]]:
         normalized_question = self._normalize(question)
         if "противор" in normalized_question or "conflict" in normalized_question:
             return conflicts
         if "method" in normalized_question or "метод" in normalized_question:
             return conflicts
-        return conflicts[:1]
+        # Relevance gate (audit M1): a conflict is attached only when it
+        # shares a material/experiment/span with the selected evidence.
+        selected_material_ids = {e.material_id for e in selected_experiments}
+        selected_experiment_ids = {e.experiment_id for e in selected_experiments}
+        selected_span_ids = {
+            span_id for e in selected_experiments for span_id in e.evidence_ids
+        }
+
+        def relevant(conflict: dict[str, object]) -> bool:
+            if str(conflict.get("material_id") or "") in selected_material_ids:
+                return True
+            experiment_ids = conflict.get("experiment_ids")
+            if isinstance(experiment_ids, list) and set(
+                str(item) for item in experiment_ids
+            ) & selected_experiment_ids:
+                return True
+            span_ids = conflict.get("supporting_span_ids")
+            return isinstance(span_ids, list) and bool(
+                set(str(item) for item in span_ids) & selected_span_ids
+            )
+
+        return [conflict for conflict in conflicts if relevant(conflict)]
 
     def _gaps_for_question(
         self,
@@ -741,12 +840,31 @@ class DemoQAService:
         return {
             token
             for token in tokens
-            if any(element in token for element in MATERIAL_ELEMENTS)
+            if _ALLOY_TOKEN_RE.fullmatch(token) and token not in _CHEMICAL_FORMULA_VETO
         }
 
     def _is_plausible_spaced_material_token(self, token: str) -> bool:
         numbers = [int(value) for value in re.findall(r"\d{1,3}", token)]
         return bool(numbers) and all(value <= 100 for value in numbers)
+
+    _ALIAS_CANDIDATE_RE = re.compile(r"\b[a-zа-яё]{1,8}\d{1,3}[a-zа-яё0-9]*\b", re.IGNORECASE)
+
+    def _alias_material_tokens(self, question: str) -> set[str]:
+        """Material tokens resolved through the entity alias table (RU codes)."""
+        repository = self.ledger_repository
+        find_entity = getattr(repository, "find_entity", None)
+        if find_entity is None:
+            return set()
+        tokens: set[str] = set()
+        for match in self._ALIAS_CANDIDATE_RE.finditer(question.lower()):
+            candidate = match.group(0)
+            try:
+                entity = find_entity(candidate, "material")
+            except Exception:  # alias lookup is additive, never breaks answers
+                continue
+            if entity is not None:
+                tokens.add(self._normalize_material_token(str(entity["canonical_name"])))
+        return {token for token in tokens if token}
 
     def _known_material_tokens(self, experiments: list[ExperimentRow]) -> set[str]:
         return {

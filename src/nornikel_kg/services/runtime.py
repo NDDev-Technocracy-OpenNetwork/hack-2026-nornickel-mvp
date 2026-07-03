@@ -42,7 +42,10 @@ def get_ledger_repository() -> DuckDBLedgerRepository:
             os.getenv("SYNTHETIC_SAMPLE_DIR", "sample_docs/synthetic")
         )
         repository = DuckDBLedgerRepository(db_path)
-        repository.seed_synthetic_fixture(sample_dir)
+        # Demo fixture seeding is env-gated: on a real-corpus stand the
+        # synthetic Ni-Cu rows would otherwise mix into every answer packet.
+        if os.getenv("SEED_SYNTHETIC_FIXTURE", "true").lower() in {"1", "true", "yes"}:
+            repository.seed_synthetic_fixture(sample_dir)
         return repository
 
 

@@ -5,7 +5,7 @@ import re
 _DASH_VARIANTS_RE = re.compile(r"[‐‑‒–—―−_]")
 _WHITESPACE_RE = re.compile(r"\s+")
 _EDGE_PUNCT_RE = re.compile(r"^[\s\"'«»„“”()\[\]{}.,:;!?]+|[\s\"'«»„“”()\[\]{}.,:;!?]+$")
-_LATIN_OR_DIGIT_RE = re.compile(r"[a-z0-9]")
+_LATIN_RE = re.compile(r"[a-z]")
 
 # Cyrillic letters whose glyphs are identical to Latin ones. Scientific texts
 # routinely mix them inside one token («700 С», «Ni-30Сu» typed with Cyrillic
@@ -29,13 +29,14 @@ _HOMOGLYPH_CYR_TO_LAT = str.maketrans(
 
 
 def _fold_homoglyphs(token: str) -> str:
-    """Fold Cyrillic homoglyphs to Latin, but only in mixed/technical tokens.
+    """Fold Cyrillic homoglyphs to Latin, but only in mixed-script tokens.
 
-    Pure-Cyrillic words (обычные русские слова) are left untouched; folding
-    applies only when the token already carries a digit or a Latin letter,
-    which marks it as a formula/alloy/unit token.
+    Only tokens that already carry a Latin letter fold («Ni-30Сu» typed with
+    Cyrillic С). Pure-Cyrillic tokens — including alloy codes like «МН30» —
+    stay Cyrillic: they are legitimate Russian designations resolved through
+    the alias table, not typos.
     """
-    if _LATIN_OR_DIGIT_RE.search(token):
+    if _LATIN_RE.search(token):
         return token.translate(_HOMOGLYPH_CYR_TO_LAT)
     return token
 
