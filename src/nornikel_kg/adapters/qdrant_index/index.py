@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 
 _DENSE_NAME = "dense"
 _SPARSE_NAME = "sparse"
+# One giant upsert of ~1700 x 1536-float points serializes past Qdrant's
+# request-size limit (400 Bad Request observed live) — batch instead.
+_UPSERT_BATCH = 128
 
 
 def _point_id(unit_id: str) -> str:
@@ -75,7 +78,11 @@ class QdrantVectorIndex:
                     payload={"unit_id": unit.unit_id, "text": unit.text, **unit.payload},
                 )
             )
-        client.upsert(collection_name=collection, points=points)
+        for start in range(0, len(points), _UPSERT_BATCH):
+            client.upsert(
+                collection_name=collection,
+                points=points[start : start + _UPSERT_BATCH],
+            )
         return len(points)
 
     def hybrid_search(

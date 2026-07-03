@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from services.api.routes import entities, evals, gaps, graph, health, query, sources, stats
+
+# Application INFO logs (reindex completion markers, semantic merges, ingest
+# progress) must reach docker logs — uvicorn configures only its own loggers.
+logging.getLogger("nornikel_kg").setLevel(logging.INFO)
+if not logging.getLogger().handlers:
+    logging.basicConfig(level=logging.INFO)
 
 
 def create_app() -> FastAPI:
