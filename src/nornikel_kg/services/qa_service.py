@@ -265,8 +265,12 @@ class DemoQAService:
             return selected_evidence
         allowed_by_id = {span.span_id: span for span in allowed_evidence}
         source_ids: list[str] | None = None
-        if request.filters and request.filters.source_ids:
-            source_ids = list(request.filters.source_ids)
+        if request.filters:
+            # Both filter spellings are honored (audit H9: `source_id` scope
+            # silently leaked other sources into the LLM packet).
+            scoped = self._list_filter_values(request.filters, "source_ids", "source_id")
+            if scoped:
+                source_ids = sorted(scoped)
         try:
             retrieved_ids = self.retrieval_service.retrieve_span_ids(
                 question=request.question,

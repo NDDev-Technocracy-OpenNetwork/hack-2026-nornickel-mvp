@@ -1050,6 +1050,33 @@ class DuckDBLedgerRepository:
             ).fetchall()
         return [self._evidence_from_row(row) for row in rows]
 
+    def list_evidence_spans_by_ids(self, span_ids: list[str]) -> list[EvidenceSpan]:
+        """Targeted rejoin for retrieval hits (never loads the full table)."""
+        if not span_ids:
+            return []
+        self.migrate()
+        placeholders = ", ".join("?" for _ in span_ids)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT
+                  span_id,
+                  source_id,
+                  artifact_id,
+                  span_type,
+                  visible_text,
+                  page,
+                  locator_json,
+                  validation_status,
+                  evidence_confidence,
+                  security_label
+                FROM evidence_spans
+                WHERE span_id IN ({placeholders})
+                """,
+                list(span_ids),
+            ).fetchall()
+        return [self._evidence_from_row(row) for row in rows]
+
     def _ensure_column(
         self,
         connection: duckdb.DuckDBPyConnection,

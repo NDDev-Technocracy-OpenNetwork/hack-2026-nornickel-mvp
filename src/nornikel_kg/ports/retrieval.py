@@ -31,7 +31,10 @@ class EmbeddingBackendPort(Protocol):
         """Dense vectors for texts (query and documents share one model)."""
 
     def embed_sparse(self, texts: list[str]) -> list[SparseVector]:
-        """Sparse lexical vectors (BM25-style); may return empty vectors."""
+        """Sparse lexical DOCUMENT vectors (BM25-style with term weights)."""
+
+    def embed_sparse_query(self, texts: list[str]) -> list[SparseVector]:
+        """Sparse lexical QUERY vectors (BM25 queries carry no term weights)."""
 
 
 class VectorIndexPort(Protocol):
@@ -48,6 +51,16 @@ class VectorIndexPort(Protocol):
         source_ids: list[str] | None = None,
     ) -> list[RetrievalHit]:
         """Dense+sparse RRF search with payload filters."""
+
+    def dense_search(
+        self,
+        collection: str,
+        *,
+        query: str,
+        top_k: int = 5,
+        payload_filters: dict[str, list[str]] | None = None,
+    ) -> list[RetrievalHit]:
+        """Dense-only search returning raw cosine scores (for thresholding)."""
 
     def delete_source_units(self, collection: str, source_id: str) -> None:
         """Remove all units belonging to one source."""

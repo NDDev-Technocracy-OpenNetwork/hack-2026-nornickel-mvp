@@ -19,7 +19,10 @@ from nornikel_kg.domain.models import EvidenceSpan
 from nornikel_kg.domain.normalization import canonical_key
 from nornikel_kg.ports.extraction import MentionExtractorPort
 from nornikel_kg.ports.llm import LLMError, LLMPort
-from nornikel_kg.services.entity_resolution import EntityResolutionService
+from nornikel_kg.services.entity_resolution import (
+    EntityResolutionService,
+    SemanticMatcherPort,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -125,9 +128,12 @@ class ExtractionService:
         llm: LLMPort | None = None,
         mention_extractor: MentionExtractorPort | None = None,
         use_gliner: bool = False,
+        semantic_matcher: SemanticMatcherPort | None = None,
     ) -> None:
         self.repository = repository
-        self.resolution = EntityResolutionService(repository)
+        self.resolution = EntityResolutionService(
+            repository, semantic_matcher=semantic_matcher
+        )
         self.llm = llm
         self._mention_extractor = mention_extractor
         self._use_gliner = use_gliner
