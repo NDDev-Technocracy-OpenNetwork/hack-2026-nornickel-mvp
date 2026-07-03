@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from services.api.routes import entities, evals, gaps, graph, health, query, sources
+from services.api.routes import entities, evals, gaps, graph, health, query, sources, stats
 
 
 def create_app() -> FastAPI:
@@ -26,6 +26,7 @@ def create_app() -> FastAPI:
     app.include_router(entities.router)
     app.include_router(gaps.router)
     app.include_router(evals.router)
+    app.include_router(stats.router)
     return app
 
 
