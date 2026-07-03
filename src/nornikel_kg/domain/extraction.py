@@ -13,6 +13,7 @@ ENTITY_TYPES = (
     "conclusion",
     "decision",
     "value",
+    "publication",
 )
 
 RELATION_TYPES = (
@@ -29,6 +30,7 @@ RELATION_TYPES = (
     "DERIVED_FROM",
     "CONTRADICTS",
     "CONCLUDES",
+    "DESCRIBED_IN",
 )
 
 
@@ -59,6 +61,10 @@ class ExtractionPayload(BaseModel):
     relations: list[ExtractedRelation] = Field(default_factory=list)
 
 
+# Strict-mode contract (OpenAI-compatible providers): every key present in
+# `properties` MUST be listed in `required`, otherwise the request itself is
+# rejected. Confidence is therefore assigned in code, not requested from the
+# model — weak models reliably emit the required-only shape.
 EXTRACTION_JSON_SCHEMA: dict[str, object] = {
     "type": "object",
     "properties": {
@@ -69,7 +75,6 @@ EXTRACTION_JSON_SCHEMA: dict[str, object] = {
                 "properties": {
                     "text": {"type": "string"},
                     "entity_type": {"type": "string", "enum": list(ENTITY_TYPES)},
-                    "confidence": {"type": "number"},
                 },
                 "required": ["text", "entity_type"],
             },
@@ -80,11 +85,10 @@ EXTRACTION_JSON_SCHEMA: dict[str, object] = {
                 "type": "object",
                 "properties": {
                     "src_text": {"type": "string"},
-                    "src_type": {"type": "string"},
+                    "src_type": {"type": "string", "enum": list(ENTITY_TYPES)},
                     "relation_type": {"type": "string", "enum": list(RELATION_TYPES)},
                     "dst_text": {"type": "string"},
-                    "dst_type": {"type": "string"},
-                    "confidence": {"type": "number"},
+                    "dst_type": {"type": "string", "enum": list(ENTITY_TYPES)},
                 },
                 "required": ["src_text", "src_type", "relation_type", "dst_text", "dst_type"],
             },

@@ -38,6 +38,7 @@ class EntityResolutionService:
         entity_type: str,
         span_ids: list[str],
         confidence: float = 0.85,
+        metadata: dict[str, object] | None = None,
     ) -> ResolutionResult:
         mention = mention.strip()
         if not mention:
@@ -63,5 +64,6 @@ class EntityResolutionService:
             canonical_name=mention,
             evidence_span_ids=span_ids,
             confidence=confidence,
+            metadata=dict(metadata) if metadata else None,
         )
         return ResolutionResult(entity_id=entity_id, action="created")

@@ -479,6 +479,25 @@ class DuckDBLedgerRepository:
                 [canonical_key(canonical_name), entity_id, canonical_name],
             )
 
+    def set_entity_metadata(self, entity_id: str, updates: dict[str, Any]) -> None:
+        """Merge metadata keys into an entity (existing keys are overwritten)."""
+        if not updates:
+            return
+        self.migrate()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT metadata_json FROM entities WHERE entity_id = ?",
+                [entity_id],
+            ).fetchone()
+            if row is None:
+                return
+            metadata: dict[str, Any] = json.loads(str(row[0] or "{}"))
+            metadata.update(updates)
+            connection.execute(
+                "UPDATE entities SET metadata_json = ?, updated_at = now() WHERE entity_id = ?",
+                [json.dumps(metadata, ensure_ascii=False, sort_keys=True), entity_id],
+            )
+
     def merge_entity_evidence(
         self,
         entity_id: str,

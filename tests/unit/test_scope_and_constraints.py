@@ -6,18 +6,20 @@ import pytest
 
 from nornikel_kg.adapters.duckdb.repositories import DuckDBLedgerRepository
 from nornikel_kg.domain.models import AskFilters, AskRequest
+from nornikel_kg.domain.quantities import NumericConstraint, parse_numeric_constraints
 from nornikel_kg.ports.parser import ParsedBlock, ParsedDocument
 from nornikel_kg.services.extraction_service import ExtractionService, _extract_authors
-from nornikel_kg.services.qa_service import DemoQAService, _parse_numeric_constraints
+from nornikel_kg.services.qa_service import DemoQAService
 
 
 def test_numeric_constraint_parser_handles_ru_operators() -> None:
-    constraints = _parse_numeric_constraints(
+    constraints = parse_numeric_constraints(
         "вода содержит сульфаты не более 300 мг/л, а остаток ≤1000 мг/дм³ при не менее 20 %"
     )
-    assert ("<=", 300.0, "мг/л") in constraints
-    assert ("<=", 1000.0, "мг/дм3") in constraints
-    assert (">=", 20.0, "%") in constraints
+    assert NumericConstraint("<=", 300.0, "мг/л") in constraints
+    # мг/дм³ is physically the same unit as мг/л and must canonicalize to it.
+    assert NumericConstraint("<=", 1000.0, "мг/л") in constraints
+    assert NumericConstraint(">=", 20.0, "%") in constraints
 
 
 def test_author_extraction_ru_and_en() -> None:

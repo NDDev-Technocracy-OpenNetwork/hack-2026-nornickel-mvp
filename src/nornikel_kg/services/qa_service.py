@@ -21,6 +21,7 @@ from nornikel_kg.domain.models import (
     GraphPath,
     PropertyMeasurement,
 )
+from nornikel_kg.domain.quantities import parse_numeric_constraints, satisfies_constraints
 from nornikel_kg.domain.security import SourceLabelPolicy
 from nornikel_kg.ports.ledger import EvidenceLedgerPort
 
@@ -35,29 +36,6 @@ MATERIAL_SPACED_TOKEN_RE = re.compile(
     rf"(?:{MATERIAL_SEPARATOR_PATTERN}{MATERIAL_ELEMENT_PATTERN})*\b",
     re.IGNORECASE,
 )
-
-
-_NUMERIC_CONSTRAINT_RE = re.compile(
-    r"(?P<op>≤|<=|не более|не выше|менее|до|≥|>=|не менее|не ниже|более|от)\s*"
-    r"(?P<value>\d+(?:[.,]\d+)?)\s*"
-    r"(?P<unit>мг/дм3|мг/дм³|мг/л|г/л|м3/ч|м³/ч|л/мин|м/с|%|c|°c|ч)?",
-    re.IGNORECASE,
-)
-
-_LE_OPS = {"≤", "<=", "не более", "не выше", "менее", "до"}
-
-
-def _parse_numeric_constraints(question: str) -> list[tuple[str, float, str]]:
-    """(op, value, normalized_unit) triples from a natural-language question."""
-    constraints: list[tuple[str, float, str]] = []
-    for match in _NUMERIC_CONSTRAINT_RE.finditer(question):
-        op_text = match.group("op").lower()
-        op = "<=" if op_text in _LE_OPS else ">="
-        value = float(match.group("value").replace(",", "."))
-        unit = (match.group("unit") or "").lower().replace(" ", "")
-        unit = unit.replace("³", "3").replace("°c", "c")
-        constraints.append((op, value, unit))
-    return constraints
 
 
 class RetrievalServiceProtocol(Protocol):
@@ -257,30 +235,24 @@ class DemoQAService:
         question: str,
         experiments: list[ExperimentRow],
     ) -> list[ExperimentRow]:
-        """Numeric constraints from the question («≤300 мг/л», «не более 1000»...).
+        """Numeric constraints from the question («≤300 мг/л», «от 100 до 300 мг/л»…).
 
-        A constraint only filters experiments whose measurement unit matches;
-        unit-less experiments are kept (honest recall over silent precision).
+        Contract (domain.quantities): only unit-bearing constraints filter, and
+        units are compared after canonicalization (мг/дм³ ≡ мг/л), so «до 2020
+        года» never silently drops valid measurements.
         """
-        constraints = _parse_numeric_constraints(question)
+        constraints = parse_numeric_constraints(question)
         if not constraints:
             return experiments
-
-        def keeps(experiment: ExperimentRow) -> bool:
-            raw_value = experiment.measurement.get("value")
-            raw_unit = str(experiment.measurement.get("unit") or "").lower().replace(" ", "")
-            if not isinstance(raw_value, int | float):
-                return True
-            for op, limit, unit in constraints:
-                if unit and raw_unit and unit != raw_unit:
-                    continue
-                if op == "<=" and raw_value > limit:
-                    return False
-                if op == ">=" and raw_value < limit:
-                    return False
-            return True
-
-        return [experiment for experiment in experiments if keeps(experiment)]
+        return [
+            experiment
+            for experiment in experiments
+            if satisfies_constraints(
+                experiment.measurement.get("value"),
+                experiment.measurement.get("unit"),
+                constraints,
+            )
+        ]
 
     def _augment_with_retrieval(
         self,

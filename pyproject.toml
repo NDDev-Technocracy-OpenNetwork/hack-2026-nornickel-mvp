@@ -8,6 +8,7 @@ dependencies = [
   "blake3>=1.0.8",
   "duckdb>=1.4.3",
   "fastapi[standard]>=0.128.0",
+  "json-repair>=0.30.0",
   "langfuse>=2.59.7,<2.60",
   "litellm>=1.83.3",
   "networkx>=3.6.1",
@@ -79,6 +80,8 @@ packages = ["nornikel_kg", "services.api"]
 
 [[tool.mypy.overrides]]
 module = [
+  "json_repair",
+  "json_repair.*",
   "litellm",
   "litellm.*",
   "langfuse",
