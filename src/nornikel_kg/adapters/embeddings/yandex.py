@@ -9,13 +9,21 @@ from nornikel_kg.ports.retrieval import SparseVector
 
 logger = logging.getLogger(__name__)
 
-_API_URL = "https://llm.api.cloud.yandex.net/foundationModels/v1/textEmbedding"
-# The new-generation unified embedder (1536-dim) serves both documents and
-# queries; the older split pair (text-search-doc / text-search-query, 256-dim)
-# stays available through the env overrides.
+# Canonical AI Studio host (docs, 2026-06): ai.api.cloud.yandex.net; the old
+# llm.api host still answers but is the legacy alias.
+_API_URL = "https://ai.api.cloud.yandex.net/foundationModels/v1/textEmbedding"
+# The new-generation unified embedder (1536-dim, newer than the documented
+# text-embeddings-v2 pair) serves both documents and queries; the split pairs
+# (text-embeddings-v2-doc/-query, text-search-doc/-query) stay available
+# through the env overrides.
 _DEFAULT_MODEL = "text-embeddings/latest"
 _MAX_RETRIES = 4
 _TIMEOUT_S = 30.0
+# Documented input cap is 2048 tokens (v1 wording; compat ref says 8192).
+# Russian text ≈ 2-3 chars/token on the Yandex tokenizer — 4000 chars stays
+# safely under the stricter bound, and a 400 here would sink the whole
+# source's indexing pass.
+_MAX_INPUT_CHARS = 4000
 
 
 class YandexEmbeddingBackend:
@@ -65,9 +73,7 @@ class YandexEmbeddingBackend:
     def _embed_one(self, text: str, model_uri: str) -> list[float]:
         import httpx
 
-        # The API caps input length; long spans are truncated defensively
-        # (retrieval units are already chunked well below this bound).
-        payload = {"modelUri": model_uri, "text": text[:8000]}
+        payload = {"modelUri": model_uri, "text": text[:_MAX_INPUT_CHARS]}
         delay = 1.0
         last_error: Exception | None = None
         for attempt in range(1, _MAX_RETRIES + 1):
@@ -75,7 +81,10 @@ class YandexEmbeddingBackend:
                 response = httpx.post(
                     _API_URL,
                     json=payload,
-                    headers={"Authorization": f"Api-Key {self.api_key}"},
+                    headers={
+                        "Authorization": f"Api-Key {self.api_key}",
+                        "x-folder-id": self.folder_id,
+                    },
                     timeout=_TIMEOUT_S,
                 )
                 if response.status_code == 429 or response.status_code >= 500:
