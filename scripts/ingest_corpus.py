@@ -6,17 +6,34 @@ size caps and quarantine-over-crash semantics:
     docker compose -f docker-compose.server.yml exec -T api \
         python scripts/ingest_corpus.py --dir data/corpus --limit 60
 
-Unsupported formats (.zip/.rar/.doc/.pptx/.xls) are counted and skipped —
-extending them is a documented P2, not a silent failure.
+Archives are expanded first: .zip, multipart .zip.001/.002 (reassembled by
+byte concatenation), and .rar (via bsdtar when installed). Images (.gif/.jpg/
+.png/.tif) are counted as no-OCR skips — never silently dropped.
 """
 
 from __future__ import annotations
 
 import argparse
+import tempfile
 import time
 from pathlib import Path
 
-SUPPORTED = {".pdf", ".docx", ".csv", ".md", ".markdown", ".txt"}
+from nornikel_kg.services.archive_expansion import expand_archives
+
+SUPPORTED = {
+    ".pdf",
+    ".docx",
+    ".docm",
+    ".doc",
+    ".csv",
+    ".md",
+    ".markdown",
+    ".txt",
+    ".xlsx",
+    ".xls",
+}
+IMAGE_EXTENSIONS = {".gif", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp"}
+ARCHIVE_EXTENSIONS = {".zip", ".rar"}
 
 
 def main() -> None:
@@ -31,44 +48,61 @@ def main() -> None:
     service = get_ingestion_service()
     service.synchronous_enrichment = True  # batch runs want completed statuses
 
-    stats = {"completed": 0, "quarantined": 0, "failed": 0, "skipped": 0, "too_large": 0}
+    stats = {
+        "completed": 0,
+        "quarantined": 0,
+        "failed": 0,
+        "skipped": 0,
+        "too_large": 0,
+        "images_no_ocr": 0,
+    }
     started = time.time()
-    files = sorted(
-        path for path in Path(args.dir).rglob("*") if path.is_file()
-    )
-    ingested = 0
-    for path in files:
-        if args.limit and ingested >= args.limit:
-            break
-        if path.suffix.lower() not in SUPPORTED:
-            stats["skipped"] += 1
-            continue
-        size_mb = path.stat().st_size / 1024 / 1024
-        if size_mb > args.max_mb:
-            stats["too_large"] += 1
-            print(f"TOO_LARGE ({size_mb:.0f}MB) {path.name[:70]}")
-            continue
-        ingested += 1
-        file_started = time.time()
-        try:
-            response = service.ingest_upload(
-                filename=path.name, content=path.read_bytes()
-            )
-            status = response.source.status
-            stats[status if status in stats else "completed"] = (
-                stats.get(status if status in stats else "completed", 0) + 1
-            )
-            print(
-                f"{status.upper():<12} {time.time() - file_started:5.1f}s "
-                f"{response.evidence_count:4d} spans  {path.name[:70]}"
-            )
-        except Exception as error:  # single bad file must never stop the batch
-            stats["failed"] += 1
-            print(f"FAILED       {path.name[:70]}: {error!r}")
+    all_files = sorted(path for path in Path(args.dir).rglob("*") if path.is_file())
+
+    with tempfile.TemporaryDirectory(prefix="corpus_archives_") as work_dir:
+        extracted, archive_stats = expand_archives(all_files, Path(work_dir))
+        if archive_stats:
+            print(f"Archives: {dict(archive_stats)} -> {len(extracted)} extracted files")
+        files = all_files + sorted(extracted)
+
+        ingested = 0
+        for path in files:
+            if args.limit and ingested >= args.limit:
+                break
+            suffix = path.suffix.lower()
+            if suffix in IMAGE_EXTENSIONS:
+                stats["images_no_ocr"] += 1
+                continue
+            if suffix in ARCHIVE_EXTENSIONS or suffix not in SUPPORTED:
+                if suffix not in ARCHIVE_EXTENSIONS:
+                    stats["skipped"] += 1
+                continue
+            size_mb = path.stat().st_size / 1024 / 1024
+            if size_mb > args.max_mb:
+                stats["too_large"] += 1
+                print(f"TOO_LARGE ({size_mb:.0f}MB) {path.name[:70]}")
+                continue
+            ingested += 1
+            file_started = time.time()
+            try:
+                response = service.ingest_upload(
+                    filename=path.name, content=path.read_bytes()
+                )
+                status = response.source.status
+                stats[status if status in stats else "completed"] = (
+                    stats.get(status if status in stats else "completed", 0) + 1
+                )
+                print(
+                    f"{status.upper():<12} {time.time() - file_started:5.1f}s "
+                    f"{response.evidence_count:4d} spans  {path.name[:70]}"
+                )
+            except Exception as error:  # single bad file must never stop the batch
+                stats["failed"] += 1
+                print(f"FAILED       {path.name[:70]}: {error!r}")
     elapsed = time.time() - started
     print(
         f"\nDone in {elapsed:.0f}s: {stats} "
-        f"({ingested} ingested of {len(files)} files seen)"
+        f"({ingested} ingested of {len(all_files)} files seen)"
     )
 
 

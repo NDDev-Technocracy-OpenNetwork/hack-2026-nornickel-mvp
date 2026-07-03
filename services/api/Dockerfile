@@ -12,8 +12,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Native libraries required by docling's vision stack (opencv/pillow backends).
+# libgl/libglib: docling vision stack; antiword/catdoc: legacy .doc text;
+# libarchive-tools (bsdtar): .rar extraction in the batch corpus ingester.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 libxcb1 libxext6 libsm6 \
+    antiword catdoc libarchive-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # Dependency layer: locked resolve without the project so code edits reuse the cache.

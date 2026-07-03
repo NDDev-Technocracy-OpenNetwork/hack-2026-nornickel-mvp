@@ -1,6 +1,8 @@
 # Accuracy / SOTA Overhaul Plan (Waves A-D)
 
 Date: 2026-07-03. Goal: maximum output-data accuracy for the track jury.
+Status: waves A-D implemented and merged (PR #15, commits 41b3acd/944e6f0/
+93f3f87/12bc5c1 + b7b12d6); stand deploy with graph rebuild in progress.
 Inputs: 4 deep audits (GLiNER2 research, SOTA stack research, backend accuracy
 audit, eval/CI/frontend audit), all claims verified against code and primary
 sources (HF cards, Qdrant/Docling/LiteLLM docs, arXiv, GitHub issues).
