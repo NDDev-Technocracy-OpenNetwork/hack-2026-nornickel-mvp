@@ -92,7 +92,8 @@ class QdrantVectorIndex:
         client = self._client()
         if not client.collection_exists(collection):
             return []
-        dense = self.embeddings.embed_dense([query])[0]
+        # Query-side models may differ from document models (Yandex doc/query).
+        dense = self.embeddings.embed_dense_query([query])[0]
         # BM25 contract: query vectors carry flat weights, never doc weights.
         sparse = self.embeddings.embed_sparse_query([query])[0]
 
@@ -157,7 +158,7 @@ class QdrantVectorIndex:
         client = self._client()
         if not client.collection_exists(collection):
             return []
-        dense = self.embeddings.embed_dense([query])[0]
+        dense = self.embeddings.embed_dense_query([query])[0]
         conditions: list[Any] = [
             models.FieldCondition(key=key, match=models.MatchAny(any=values))
             for key, values in (payload_filters or {}).items()

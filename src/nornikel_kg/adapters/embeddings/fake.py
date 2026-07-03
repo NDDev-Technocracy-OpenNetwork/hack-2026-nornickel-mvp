@@ -18,6 +18,9 @@ class FakeEmbeddingBackend:
     def embed_dense(self, texts: list[str]) -> list[list[float]]:
         return [self._embed_one(text) for text in texts]
 
+    def embed_dense_query(self, texts: list[str]) -> list[list[float]]:
+        return self.embed_dense(texts)
+
     def embed_sparse(self, texts: list[str]) -> list[SparseVector]:
         vectors: list[SparseVector] = []
         for text in texts:

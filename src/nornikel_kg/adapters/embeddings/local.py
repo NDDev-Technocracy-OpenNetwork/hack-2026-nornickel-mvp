@@ -46,6 +46,10 @@ class LocalEmbeddingBackend:
         vectors = _dense_model().encode(texts, normalize_embeddings=True)
         return [vector.tolist() for vector in vectors]
 
+    def embed_dense_query(self, texts: list[str]) -> list[list[float]]:
+        # USER-bge-m3 is symmetric: queries and documents share one model.
+        return self.embed_dense(texts)
+
     def embed_sparse(self, texts: list[str]) -> list[SparseVector]:
         return [_to_sparse(embedding) for embedding in _sparse_model().embed(texts)]
 

@@ -1,0 +1,109 @@
+from __future__ import annotations
+
+import logging
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+from nornikel_kg.ports.retrieval import SparseVector
+
+logger = logging.getLogger(__name__)
+
+_API_URL = "https://llm.api.cloud.yandex.net/foundationModels/v1/textEmbedding"
+# The new-generation unified embedder (1536-dim) serves both documents and
+# queries; the older split pair (text-search-doc / text-search-query, 256-dim)
+# stays available through the env overrides.
+_DEFAULT_MODEL = "text-embeddings/latest"
+_MAX_RETRIES = 4
+_TIMEOUT_S = 30.0
+
+
+class YandexEmbeddingBackend:
+    """Dense embeddings via Yandex AI Studio; sparse BM25 stays local.
+
+    Dense vectors come from the organizers' Yandex AI Studio API (offloads
+    the 8-vCPU stand from torch inference); BM25 sparse vectors are produced
+    by fastembed exactly as in the local backend, so hybrid search keeps its
+    lexical leg offline.
+    """
+
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        folder_id: str | None = None,
+        doc_model: str | None = None,
+        query_model: str | None = None,
+        max_workers: int = 8,
+    ) -> None:
+        self.api_key = api_key or os.getenv("YANDEX_API_KEY", "")
+        self.folder_id = folder_id or os.getenv("YANDEX_FOLDER_ID", "")
+        if not self.api_key or not self.folder_id:
+            raise ValueError("YandexEmbeddingBackend needs YANDEX_API_KEY and YANDEX_FOLDER_ID")
+        doc = doc_model or os.getenv("YANDEX_EMBED_DOC_MODEL", _DEFAULT_MODEL)
+        query = query_model or os.getenv("YANDEX_EMBED_QUERY_MODEL", _DEFAULT_MODEL)
+        self.doc_model_uri = f"emb://{self.folder_id}/{doc}"
+        self.query_model_uri = f"emb://{self.folder_id}/{query}"
+        self.max_workers = max_workers
+
+    # -- dense (API) --------------------------------------------------------
+
+    def embed_dense(self, texts: list[str]) -> list[list[float]]:
+        return self._embed_many(texts, self.doc_model_uri)
+
+    def embed_dense_query(self, texts: list[str]) -> list[list[float]]:
+        return self._embed_many(texts, self.query_model_uri)
+
+    def _embed_many(self, texts: list[str], model_uri: str) -> list[list[float]]:
+        if not texts:
+            return []
+        if len(texts) == 1:
+            return [self._embed_one(texts[0], model_uri)]
+        with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
+            return list(pool.map(lambda text: self._embed_one(text, model_uri), texts))
+
+    def _embed_one(self, text: str, model_uri: str) -> list[float]:
+        import httpx
+
+        # The API caps input length; long spans are truncated defensively
+        # (retrieval units are already chunked well below this bound).
+        payload = {"modelUri": model_uri, "text": text[:8000]}
+        delay = 1.0
+        last_error: Exception | None = None
+        for attempt in range(1, _MAX_RETRIES + 1):
+            try:
+                response = httpx.post(
+                    _API_URL,
+                    json=payload,
+                    headers={"Authorization": f"Api-Key {self.api_key}"},
+                    timeout=_TIMEOUT_S,
+                )
+                if response.status_code == 429 or response.status_code >= 500:
+                    raise RuntimeError(f"HTTP {response.status_code}: {response.text[:120]}")
+                response.raise_for_status()
+                return [float(v) for v in response.json()["embedding"]]
+            except Exception as error:  # noqa: BLE001 - bounded retry loop
+                last_error = error
+                if attempt == _MAX_RETRIES:
+                    break
+                logger.warning(
+                    "Yandex embedding attempt %s failed (%s); retrying in %.1fs",
+                    attempt,
+                    str(error)[:100],
+                    delay,
+                )
+                time.sleep(delay)
+                delay *= 2
+        raise RuntimeError(f"Yandex embedding failed after {_MAX_RETRIES} attempts") from last_error
+
+    # -- sparse (local fastembed, same as LocalEmbeddingBackend) ------------
+
+    def embed_sparse(self, texts: list[str]) -> list[SparseVector]:
+        from nornikel_kg.adapters.embeddings.local import LocalEmbeddingBackend
+
+        return LocalEmbeddingBackend().embed_sparse(texts)
+
+    def embed_sparse_query(self, texts: list[str]) -> list[SparseVector]:
+        from nornikel_kg.adapters.embeddings.local import LocalEmbeddingBackend
+
+        return LocalEmbeddingBackend().embed_sparse_query(texts)
