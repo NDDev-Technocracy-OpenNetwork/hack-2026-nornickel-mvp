@@ -42,6 +42,18 @@ export function AnalysisWorkbench() {
     void refreshSources();
   }, []);
 
+  // Enrichment runs in the background: while any source is still «обработка»,
+  // keep polling so the card flips to «готов» without a manual refresh.
+  useEffect(() => {
+    if (!sources.some((source) => source.status === "running")) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void refreshSources();
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [sources]);
+
   async function refreshSources() {
     try {
       setArtifactError(null);
@@ -342,6 +354,15 @@ export function AnalysisWorkbench() {
           ) : null}
           {answer ? (
             <div className="answer-list">
+              <div className="status-pill">
+                <CheckCircle2 size={16} />
+                {"Уверенность: "}
+                {answer.confidence === "high"
+                  ? "высокая"
+                  : answer.confidence === "medium"
+                    ? "средняя"
+                    : "низкая"}
+              </div>
               {answer.answer_summary.length > 0 ? (
                 answer.answer_summary.map((sentence) => (
                   <div className="answer-sentence" key={sentence.sentence}>
@@ -381,6 +402,22 @@ export function AnalysisWorkbench() {
           )}
         </Panel>
 
+        {answer && answer.conflicts.length > 0 ? (
+          <Panel title="Противоречия в данных">
+            <div className="answer-list">
+              {answer.conflicts.map((conflict, index) => (
+                <div
+                  className="answer-sentence"
+                  key={String(conflict.conflict_group_id ?? index)}
+                >
+                  <AlertTriangle size={14} />{" "}
+                  {String(conflict.summary ?? conflict.type ?? "Конфликт данных")}
+                </div>
+              ))}
+            </div>
+          </Panel>
+        ) : null}
+
         {answer && answer.experiments.length > 0 ? (
           <Panel title="Таблица экспериментов">
             <table className="experiment-table">
@@ -400,8 +437,14 @@ export function AnalysisWorkbench() {
                     <td>{experiment.regime_summary}</td>
                     <td>{experiment.property_name}</td>
                     <td>
-                      {String(experiment.measurement.effect_direction)} ·{" "}
-                      {String(experiment.measurement.value)} {String(experiment.measurement.unit)}
+                      {experiment.measurement.effect_direction != null
+                        ? String(experiment.measurement.effect_direction)
+                        : "—"}
+                      {experiment.measurement.value != null
+                        ? ` · ${String(experiment.measurement.value)} ${String(
+                            experiment.measurement.unit ?? "",
+                          )}`
+                        : ""}
                     </td>
                     <td>{experiment.evidence_ids.join(", ")}</td>
                   </tr>

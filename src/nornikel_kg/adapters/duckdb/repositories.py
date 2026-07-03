@@ -949,7 +949,9 @@ class DuckDBLedgerRepository:
                   s.security_label,
                   COUNT(DISTINCT ev.span_id) AS evidence_count,
                   COUNT(DISTINCT pm.measurement_id) AS measurement_count,
-                  MAX(ir.status) AS run_status
+                  MAX(ir.status) AS run_status,
+                  s.year,
+                  s.geography
                 FROM sources s
                 LEFT JOIN evidence_spans ev ON ev.source_id = s.source_id
                 LEFT JOIN property_measurements pm ON pm.source_id = s.source_id
@@ -960,7 +962,8 @@ class DuckDBLedgerRepository:
                          ) AS rn
                   FROM ingestion_runs
                 ) ir ON ir.source_id = s.source_id AND ir.rn = 1
-                GROUP BY s.source_id, s.title, s.document_type, s.security_label, s.created_at
+                GROUP BY s.source_id, s.title, s.document_type, s.security_label,
+                         s.created_at, s.year, s.geography
                 ORDER BY s.created_at DESC, s.title
                 """
             ).fetchall()
@@ -973,6 +976,8 @@ class DuckDBLedgerRepository:
                 status=str(row[6]) if row[6] else "ledger",
                 evidence_count=int(row[4]),
                 measurement_count=int(row[5]),
+                year=None if row[7] is None else int(row[7]),
+                geography=None if row[8] is None else str(row[8]),
             )
             for row in rows
         ]

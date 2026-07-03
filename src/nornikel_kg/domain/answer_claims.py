@@ -53,6 +53,11 @@ class ClaimVerifier:
                 span = span_by_id.get(span_id)
                 if span is None or not source_label_policy.is_allowed(span):
                     source_label_leak_count += 1
+            if sentence.supporting_fact_ids:
+                # Fact-backed sentences (deterministic assembler) derive
+                # numbers like Δ from structured ledger measurements — their
+                # provenance is the fact id, not the literal span text.
+                continue
             cited_texts = [
                 span_by_id[span_id].visible_text
                 for span_id in sentence.supporting_span_ids

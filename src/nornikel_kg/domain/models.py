@@ -41,6 +41,8 @@ class SourceSummary(BaseModel):
     status: str
     evidence_count: int = 0
     measurement_count: int = 0
+    year: int | None = None
+    geography: str | None = None
 
 
 class SourceIngestResponse(BaseModel):
