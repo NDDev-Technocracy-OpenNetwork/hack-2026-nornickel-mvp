@@ -3,8 +3,15 @@
 Runs inside the api container (no HTTP hop), file by file, with per-file
 size caps and quarantine-over-crash semantics:
 
-    docker compose -f docker-compose.server.yml exec -T api \
+    docker compose -f docker-compose.server.yml stop api   # release the DB lock
+    docker compose -f docker-compose.server.yml run --rm --no-deps -T api \
         python scripts/ingest_corpus.py --dir data/corpus --limit 60
+    docker compose -f docker-compose.server.yml up -d
+
+LOCK CONTRACT: the API process holds a persistent DuckDB write connection,
+so this script and a running API are mutually exclusive — whichever opens
+the file first wins and the other sees lock errors. Stop the api container
+for the batch window (the script fails fast with a clear message otherwise).
 
 Archives are expanded first: .zip, multipart .zip.001/.002 (reassembled by
 byte concatenation), and .rar (via bsdtar when installed). Images (.gif/.jpg/
@@ -43,7 +50,15 @@ def main() -> None:
     parser.add_argument("--max-mb", type=float, default=20.0, help="Per-file size cap")
     args = parser.parse_args()
 
-    from nornikel_kg.services.runtime import get_ingestion_service
+    from nornikel_kg.services.runtime import get_ingestion_service, get_ledger_repository
+
+    try:
+        get_ledger_repository().migrate()
+    except Exception as error:
+        raise SystemExit(
+            f"Cannot open the ledger (is the api container holding the DuckDB "
+            f"lock? stop it for the batch window): {error!r}"
+        ) from error
 
     service = get_ingestion_service()
     service.synchronous_enrichment = True  # batch runs want completed statuses
