@@ -88,8 +88,34 @@ class YandexEmbeddingBackend:
     def embed_dense(self, texts: list[str]) -> list[list[float]]:
         return self._embed_many(texts, self.doc_model_uri)
 
+    # Repeated demo questions re-embed the same query strings; a small
+    # process-wide cache spares both latency and the shared RPS quota.
+    _query_cache: dict[tuple[str, str], list[float]] = {}
+    _query_cache_lock = threading.Lock()
+    _QUERY_CACHE_MAX = 256
+
     def embed_dense_query(self, texts: list[str]) -> list[list[float]]:
-        return self._embed_many(texts, self.query_model_uri)
+        results: list[list[float] | None] = []
+        missing: list[str] = []
+        with self._query_cache_lock:
+            for text in texts:
+                cached = self._query_cache.get((self.query_model_uri, text))
+                results.append(list(cached) if cached is not None else None)
+                if cached is None:
+                    missing.append(text)
+        if missing:
+            fresh = self._embed_many(missing, self.query_model_uri)
+            with self._query_cache_lock:
+                for text, vector in zip(missing, fresh, strict=True):
+                    if len(self._query_cache) >= self._QUERY_CACHE_MAX:
+                        self._query_cache.pop(next(iter(self._query_cache)))
+                    self._query_cache[(self.query_model_uri, text)] = vector
+            fresh_iter = iter(fresh)
+            results = [
+                vector if vector is not None else list(next(fresh_iter))
+                for vector in results
+            ]
+        return [vector for vector in results if vector is not None]
 
     def _embed_many(self, texts: list[str], model_uri: str) -> list[list[float]]:
         if not texts:

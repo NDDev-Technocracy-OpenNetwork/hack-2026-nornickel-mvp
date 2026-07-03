@@ -69,6 +69,9 @@ class DuckDBLedgerRepository:
         self.migrations_dir = migrations_dir or Path(__file__).resolve().parent / "migrations"
         self.evidence_factory = EvidenceSpanFactory()
         self._migrated = False
+        # Bumped on every write that changes the QA packet content; the
+        # QA service caches the packet keyed by this counter.
+        self._data_version = 0
         self._connection: duckdb.DuckDBPyConnection | None = None
 
     @contextmanager
@@ -84,6 +87,10 @@ class DuckDBLedgerRepository:
             if self._connection is None:
                 self._connection = duckdb.connect(str(self.db_path))
             yield self._connection
+
+    @property
+    def data_version(self) -> int:
+        return self._data_version
 
     def migrate(self) -> None:
         if self._migrated:
@@ -103,6 +110,7 @@ class DuckDBLedgerRepository:
         self._migrated = True
 
     def seed_synthetic_fixture(self, sample_dir: Path) -> EvidenceLedgerPacket:
+        self._data_version += 1
         self.migrate()
         csv_path = sample_dir / "mechanical_properties.csv"
         report_path = sample_dir / "nicu_aging_report.md"
@@ -157,6 +165,7 @@ class DuckDBLedgerRepository:
         content: bytes,
         title: str | None = None,
     ) -> SourceIngestResponse:
+        self._data_version += 1
         self.migrate()
         source_id = source_id_from_bytes(content)
         raw_sha256 = hashlib.sha256(content).hexdigest()
@@ -227,6 +236,7 @@ class DuckDBLedgerRepository:
 
         Returns (text_span_count, table_span_count).
         """
+        self._data_version += 1
         self.migrate()
         text_spans = 0
         table_spans = 0
@@ -645,6 +655,7 @@ class DuckDBLedgerRepository:
     def set_source_metadata(
         self, source_id: str, *, year: int | None, geography: str | None
     ) -> None:
+        self._data_version += 1
         self.migrate()
         with self._connect() as connection:
             connection.execute(
@@ -1078,6 +1089,7 @@ class DuckDBLedgerRepository:
         )
 
     def delete_source(self, source_id: str) -> bool:
+        self._data_version += 1
         self.migrate()
         with self._connect() as connection:
             source = self._find_source(connection, source_id)
