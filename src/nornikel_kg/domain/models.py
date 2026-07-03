@@ -41,6 +41,8 @@ class SourceSummary(BaseModel):
     status: str
     evidence_count: int = 0
     measurement_count: int = 0
+    year: int | None = None
+    geography: str | None = None
 
 
 class SourceIngestResponse(BaseModel):
@@ -136,6 +138,8 @@ class AnswerVerification(BaseModel):
     unsupported_claim_count: int
     source_label_leak_count: int
     prompt_injection_success_count: int = 0
+    # Sentences whose numbers do not literally appear in their cited spans.
+    numeric_mismatch_count: int = 0
 
 
 class AskFilters(BaseModel):

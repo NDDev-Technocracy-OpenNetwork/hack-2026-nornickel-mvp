@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Protocol
 
 from nornikel_kg.adapters.duckdb.repositories import DuckDBLedgerRepository
 from nornikel_kg.ports.retrieval import IndexableUnit, VectorIndexPort
@@ -12,33 +13,51 @@ EVIDENCE_COLLECTION = os.getenv("QDRANT_COLLECTION", "evidence_units")
 ENTITY_COLLECTION = "entities"
 
 
+class RerankerPort(Protocol):
+    def rerank(
+        self, query: str, candidates: list[tuple[str, str]], *, top_k: int
+    ) -> list[str]:
+        """(unit_id, text) candidates -> unit_ids of the top_k most relevant."""
+
+
 class RetrievalService:
     """Qdrant hybrid retrieval over evidence spans, rejoined to DuckDB.
 
     Retrieval is additive: the deterministic slot-SQL path stays primary and
     any index failure degrades to an empty candidate list, never an error.
+    With a reranker attached, hybrid search over-fetches candidates and a
+    cross-encoder picks the final top-k (the highest-precision stage).
     """
 
     def __init__(
         self,
         repository: DuckDBLedgerRepository,
         index: VectorIndexPort | None,
+        *,
+        reranker: RerankerPort | None = None,
+        rerank_candidates: int = 30,
     ) -> None:
         self.repository = repository
         self.index = index
+        self.reranker = reranker
+        self.rerank_candidates = rerank_candidates
 
     @property
     def enabled(self) -> bool:
         return self.index is not None
 
-    def index_source(self, source_id: str) -> int:
+    def index_source(self, source_id: str, *, include_entities: bool = True) -> int:
         if self.index is None:
             return 0
         spans = self.repository.list_evidence_spans(source_id)
+        source = self.repository.get_source(source_id)
+        # Source title as embedded context: short spans («245 HV | 8 h») are
+        # unfindable without the document topic; provenance stays span-exact.
+        title_prefix = f"{source.title}\n" if source is not None and source.title else ""
         units = [
             IndexableUnit(
                 unit_id=span.span_id,
-                text=span.visible_text,
+                text=f"{title_prefix}{span.visible_text}",
                 payload={
                     "source_id": span.source_id,
                     "span_type": span.span_type,
@@ -51,7 +70,8 @@ class RetrievalService:
         try:
             self.index.delete_source_units(EVIDENCE_COLLECTION, source_id)
             count = self.index.index_units(EVIDENCE_COLLECTION, units)
-            count += self._index_entities()
+            if include_entities:
+                count += self._index_entities()
             return count
         except Exception:
             logger.warning("Indexing failed for %s; retrieval degraded", source_id, exc_info=True)
@@ -62,7 +82,12 @@ class RetrievalService:
             return 0
         total = 0
         for source in self.repository.list_sources():
-            total += self.index_source(source.source_id)
+            # Entities are global; index them once at the end, not per source.
+            total += self.index_source(source.source_id, include_entities=False)
+        try:
+            total += self._index_entities()
+        except Exception:
+            logger.warning("Entity indexing failed; resolution fallback degraded", exc_info=True)
         return total
 
     def _index_entities(self) -> int:
@@ -85,14 +110,15 @@ class RetrievalService:
         source_ids: list[str] | None = None,
         top_k: int = 10,
     ) -> list[str]:
-        """Hybrid search -> span IDs verified to still exist in DuckDB."""
+        """Hybrid search (+ optional rerank) -> span IDs verified in DuckDB."""
         if self.index is None:
             return []
+        candidate_k = self.rerank_candidates if self.reranker is not None else top_k
         try:
             hits = self.index.hybrid_search(
                 EVIDENCE_COLLECTION,
                 query=question,
-                top_k=top_k,
+                top_k=max(candidate_k, top_k),
                 allowed_labels=allowed_labels,
                 source_ids=source_ids,
             )
@@ -104,7 +130,20 @@ class RetrievalService:
         # DuckDB rejoin + allowed-label recheck: the index is never authoritative.
         known = {
             span.span_id: span
-            for span in self.repository.list_evidence_spans()
+            for span in self.repository.list_evidence_spans_by_ids(
+                [hit.unit_id for hit in hits]
+            )
             if span.security_label in allowed_labels
         }
-        return [hit.unit_id for hit in hits if hit.unit_id in known]
+        verified = [hit.unit_id for hit in hits if hit.unit_id in known]
+        if self.reranker is None or len(verified) <= top_k:
+            return verified[:top_k]
+        try:
+            return self.reranker.rerank(
+                question,
+                [(span_id, known[span_id].visible_text) for span_id in verified],
+                top_k=top_k,
+            )
+        except Exception:
+            logger.warning("Reranking failed; returning fused order", exc_info=True)
+            return verified[:top_k]

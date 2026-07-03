@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 from pathlib import Path
 from typing import Annotated
@@ -10,7 +11,12 @@ from pydantic import BaseModel, HttpUrl
 from nornikel_kg.adapters.duckdb.repositories import SourceIngestError
 from nornikel_kg.domain.models import EvidenceSpan, SourceIngestResponse, SourceSummary
 from nornikel_kg.ports.parser import ParserError
-from nornikel_kg.services.runtime import get_ingestion_service, get_ledger_repository
+from nornikel_kg.services.retrieval_service import EVIDENCE_COLLECTION
+from nornikel_kg.services.runtime import (
+    get_ingestion_service,
+    get_ledger_repository,
+    get_retrieval_service,
+)
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
@@ -77,6 +83,11 @@ def delete_source(source_id: str) -> dict[str, object]:
     repository = get_ledger_repository()
     if not repository.delete_source(source_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
+    # Vector index cleanup is best-effort: DuckDB rejoin already guards reads.
+    retrieval = get_retrieval_service()
+    if retrieval.index is not None:
+        with contextlib.suppress(Exception):
+            retrieval.index.delete_source_units(EVIDENCE_COLLECTION, source_id)
     return {"source_id": source_id, "deleted": True}
 
 

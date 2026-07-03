@@ -42,7 +42,10 @@ def get_ledger_repository() -> DuckDBLedgerRepository:
             os.getenv("SYNTHETIC_SAMPLE_DIR", "sample_docs/synthetic")
         )
         repository = DuckDBLedgerRepository(db_path)
-        repository.seed_synthetic_fixture(sample_dir)
+        # Demo fixture seeding is env-gated: on a real-corpus stand the
+        # synthetic Ni-Cu rows would otherwise mix into every answer packet.
+        if os.getenv("SEED_SYNTHETIC_FIXTURE", "true").lower() in {"1", "true", "yes"}:
+            repository.seed_synthetic_fixture(sample_dir)
         return repository
 
 
@@ -76,7 +79,16 @@ def get_retrieval_service() -> RetrievalService:
             embeddings = FakeEmbeddingBackend()
         qdrant_url = os.getenv("QDRANT_URL", "http://qdrant:6333")
         index = QdrantVectorIndex(qdrant_url, embeddings)  # type: ignore[arg-type]
-    return RetrievalService(get_ledger_repository(), index)
+    reranker = None
+    if index is not None and os.getenv("RERANKER_ENABLED", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+    }:
+        from nornikel_kg.adapters.reranker import CrossEncoderReranker
+
+        reranker = CrossEncoderReranker()
+    return RetrievalService(get_ledger_repository(), index, reranker=reranker)
 
 
 @lru_cache
@@ -105,7 +117,20 @@ def get_extraction_service() -> ExtractionService:
     }
     llm = build_llm(settings) if settings.llm_enabled and extraction_llm_on else None
     use_gliner = os.getenv("GLINER_ENABLED", "true").lower() in {"1", "true", "yes"}
-    return ExtractionService(get_ledger_repository(), llm=llm, use_gliner=use_gliner)
+    semantic_matcher = None
+    retrieval = get_retrieval_service()
+    if retrieval.index is not None and os.getenv(
+        "ENTITY_SEMANTIC_FALLBACK", "true"
+    ).lower() in {"1", "true", "yes"}:
+        from nornikel_kg.services.entity_resolution import QdrantSemanticMatcher
+
+        semantic_matcher = QdrantSemanticMatcher(retrieval.index)
+    return ExtractionService(
+        get_ledger_repository(),
+        llm=llm,
+        use_gliner=use_gliner,
+        semantic_matcher=semantic_matcher,
+    )
 
 
 @lru_cache

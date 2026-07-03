@@ -32,6 +32,13 @@ class FakeEmbeddingBackend:
             )
         return vectors
 
+    def embed_sparse_query(self, texts: list[str]) -> list[SparseVector]:
+        # Query vectors mirror document vectors with flat weights (BM25 contract).
+        return [
+            SparseVector(indices=vector.indices, values=[1.0] * len(vector.indices))
+            for vector in self.embed_sparse(texts)
+        ]
+
     def _embed_one(self, text: str) -> list[float]:
         vector = [0.0] * _DIM
         for token in text.lower().split():

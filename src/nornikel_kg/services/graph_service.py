@@ -58,10 +58,16 @@ class GraphService:
             if len(nodes) >= limit:
                 break
         # Keep the focus node plus highest-evidence neighbors within the limit.
-        ranked = sorted(
-            (node for node in nodes if node != entity_id),
-            key=lambda node: -int(graph.nodes[node].get("evidence_count", 0)),
-        )
+        # People and publications get a type boost: «кто эксперт по теме» must
+        # not lose them to densely-connected material nodes (audit gap).
+        type_boost = {"person": 1000, "publication": 500, "team": 500, "laboratory": 500}
+
+        def rank_key(node: str) -> int:
+            data = graph.nodes[node]
+            boost = type_boost.get(str(data.get("entity_type", "")), 0)
+            return -(int(data.get("evidence_count", 0)) + boost)
+
+        ranked = sorted((node for node in nodes if node != entity_id), key=rank_key)
         kept = {entity_id, *ranked[: max(0, limit - 1)]}
         subgraph = graph.subgraph(kept)
         return {

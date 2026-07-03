@@ -18,6 +18,8 @@ export type SourceSummary = {
   status: string;
   evidence_count: number;
   measurement_count: number;
+  year: number | null;
+  geography: string | null;
 };
 
 export type SourceIngestResponse = {
@@ -62,6 +64,7 @@ export type AskResponse = {
     unsupported_claim_count: number;
     source_label_leak_count: number;
     prompt_injection_success_count: number;
+    numeric_mismatch_count: number;
   };
   conflicts: Array<Record<string, unknown>>;
   gaps: Array<Record<string, unknown>>;
@@ -144,5 +147,6 @@ export type TimelineEvent = {
   entity_type: string;
   title: string;
   date: string | null;
+  year: number | null;
   evidence_span_ids: string[];
 };

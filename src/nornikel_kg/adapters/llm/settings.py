@@ -9,7 +9,9 @@ class LLMSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="", extra="ignore")
 
     llm_enabled: bool = False
-    dataeyes_api_base: str = "https://api.dataeyes.ai/v1"
+    # Unified LLM endpoint (api.dataeyes.ai is their separate Search & Reader
+    # product with its own keys — a wrong default silently kills the gateway).
+    dataeyes_api_base: str = "https://platform.dataeyes.ai/v1"
     dataeyes_api_key: str = ""
     llm_extraction_model: str = ""
     llm_answer_model: str = ""

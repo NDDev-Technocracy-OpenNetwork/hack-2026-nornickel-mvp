@@ -95,17 +95,32 @@ def test_gateway_parses_json_and_charges_budget(monkeypatch: pytest.MonkeyPatch)
     assert "extraction" in captured["metadata"]["tags"]
 
 
-def test_gateway_rejects_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gateway_rejects_unrepairable_output(monkeypatch: pytest.MonkeyPatch) -> None:
     gateway = LiteLLMGateway(_settings())
     import litellm
 
     monkeypatch.setattr(
-        litellm, "completion", lambda **kwargs: _completion_response("not json {")
+        litellm, "completion", lambda **kwargs: _completion_response("plain prose, no JSON here")
     )
     with pytest.raises(LLMInvalidResponseError):
         gateway.generate_json(
             task="answer", system_prompt="s", user_prompt="u", json_schema=SCHEMA
         )
+
+
+def test_gateway_repairs_fenced_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Weak models wrap JSON in markdown fences; the repair pass recovers it."""
+    gateway = LiteLLMGateway(_settings())
+    import litellm
+
+    fenced = '```json\n{"sentences": [{"sentence": "ok", "supporting_span_ids": ["s1"]},]}\n```'
+    monkeypatch.setattr(litellm, "completion", lambda **kwargs: _completion_response(fenced))
+    result = gateway.generate_json(
+        task="answer", system_prompt="s", user_prompt="u", json_schema=SCHEMA
+    )
+    assert result.content == {
+        "sentences": [{"sentence": "ok", "supporting_span_ids": ["s1"]}]
+    }
 
 
 def test_token_budget_hard_stop() -> None:

@@ -93,7 +93,8 @@ class QdrantVectorIndex:
         if not client.collection_exists(collection):
             return []
         dense = self.embeddings.embed_dense([query])[0]
-        sparse = self.embeddings.embed_sparse([query])[0]
+        # BM25 contract: query vectors carry flat weights, never doc weights.
+        sparse = self.embeddings.embed_sparse_query([query])[0]
 
         conditions: list[Any] = []
         if allowed_labels:
@@ -108,15 +109,21 @@ class QdrantVectorIndex:
             )
         query_filter = models.Filter(must=conditions) if conditions else None
 
+        # Fusion needs a candidate pool well above the final limit; filters go
+        # into every prefetch too (version-stable propagation).
+        prefetch_limit = max(50, top_k * 3)
         prefetch = [
-            models.Prefetch(query=dense, using=_DENSE_NAME, limit=top_k * 3),
+            models.Prefetch(
+                query=dense, using=_DENSE_NAME, limit=prefetch_limit, filter=query_filter
+            ),
         ]
         if sparse.indices:
             prefetch.append(
                 models.Prefetch(
                     query=models.SparseVector(indices=sparse.indices, values=sparse.values),
                     using=_SPARSE_NAME,
-                    limit=top_k * 3,
+                    limit=prefetch_limit,
+                    filter=query_filter,
                 )
             )
         response = client.query_points(
@@ -124,6 +131,43 @@ class QdrantVectorIndex:
             prefetch=prefetch,
             query=models.FusionQuery(fusion=models.Fusion.RRF),
             query_filter=query_filter,
+            limit=top_k,
+            with_payload=True,
+        )
+        return [
+            RetrievalHit(
+                unit_id=str((point.payload or {}).get("unit_id", point.id)),
+                score=float(point.score),
+                payload=dict(point.payload or {}),
+            )
+            for point in response.points
+        ]
+
+    def dense_search(
+        self,
+        collection: str,
+        *,
+        query: str,
+        top_k: int = 5,
+        payload_filters: dict[str, list[str]] | None = None,
+    ) -> list[RetrievalHit]:
+        """Dense-only search returning raw cosine scores (for thresholding)."""
+        from qdrant_client import models
+
+        client = self._client()
+        if not client.collection_exists(collection):
+            return []
+        dense = self.embeddings.embed_dense([query])[0]
+        conditions: list[Any] = [
+            models.FieldCondition(key=key, match=models.MatchAny(any=values))
+            for key, values in (payload_filters or {}).items()
+            if values
+        ]
+        response = client.query_points(
+            collection_name=collection,
+            query=dense,
+            using=_DENSE_NAME,
+            query_filter=models.Filter(must=conditions) if conditions else None,
             limit=top_k,
             with_payload=True,
         )

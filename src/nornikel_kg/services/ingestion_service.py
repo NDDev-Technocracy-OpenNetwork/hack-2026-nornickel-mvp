@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import re
 import threading
 from pathlib import Path
 from typing import Protocol
 
 from nornikel_kg.adapters.duckdb.repositories import DuckDBLedgerRepository, SourceIngestError
+from nornikel_kg.domain.dates import extract_year, extract_year_from_filename
 from nornikel_kg.domain.ids import source_id_from_bytes, stable_hash
 from nornikel_kg.domain.models import SourceIngestResponse
 from nornikel_kg.ports.parser import (
@@ -89,6 +89,11 @@ class IngestionService:
             response = self.repository.ingest_source_bytes(
                 filename=filename, content=content, title=title
             )
+            self._set_year_geography(
+                response.source.source_id,
+                filename,
+                content.decode("utf-8", errors="ignore")[:3000],
+            )
             extraction_counters = self._run_extraction(response.source.source_id)
             self._record_run(
                 source_id=response.source.source_id,
@@ -132,6 +137,7 @@ class IngestionService:
             artifact_locator=url,
         )
         self._archive_artifact(source_id, "parsed.txt", content)
+        self._apply_source_metadata(source_id, url, parsed)
         extraction_counters = self._run_extraction(source_id)
         self._record_run(
             source_id=source_id,
@@ -196,19 +202,29 @@ class IngestionService:
     ) -> None:
         """Year + geography heuristics for query-time filters.
 
-        Year: the most recent plausible year in the filename or head text.
-        Geography: `ru` when the head text is predominantly Cyrillic, else
-        `foreign` — a coarse but honest split for the track's
-        «отечественная vs зарубежная практика» filter.
+        Year: filename year wins (explicit labeling), else a year-marker-
+        guarded scan of the head text (domain.dates — bare numbers like
+        «1963 K» no longer masquerade as years). Geography: `ru` when the
+        head text is predominantly Cyrillic («ё» included), else `foreign` —
+        a coarse but honest split for «отечественная vs зарубежная практика».
         """
         head = " ".join(block.text for block in parsed.blocks[:20])[:3000]
-        years = [
-            int(match)
-            for match in re.findall(r"\b(19[5-9]\d|20[0-4]\d)\b", f"{filename} {head}")
-        ]
-        year = max(years) if years else None
-        cyrillic = sum(1 for ch in head if "а" <= ch.lower() <= "я")
-        latin = sum(1 for ch in head if "a" <= ch.lower() <= "z")
+        parsed_date = str(parsed.metadata.get("date") or "")
+        fallback_year = extract_year(f"{parsed_date} г.") if parsed_date else None
+        self._set_year_geography(source_id, filename, head, fallback_year=fallback_year)
+
+    def _set_year_geography(
+        self,
+        source_id: str,
+        filename: str,
+        head: str,
+        *,
+        fallback_year: int | None = None,
+    ) -> None:
+        year = extract_year_from_filename(filename) or extract_year(head) or fallback_year
+        lowered = head.lower()
+        cyrillic = sum(1 for ch in lowered if "а" <= ch <= "я" or ch == "ё")
+        latin = sum(1 for ch in lowered if "a" <= ch <= "z")
         geography = None
         if cyrillic + latin > 40:
             geography = "ru" if cyrillic >= latin else "foreign"

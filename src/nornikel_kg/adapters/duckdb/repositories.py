@@ -479,6 +479,25 @@ class DuckDBLedgerRepository:
                 [canonical_key(canonical_name), entity_id, canonical_name],
             )
 
+    def set_entity_metadata(self, entity_id: str, updates: dict[str, Any]) -> None:
+        """Merge metadata keys into an entity (existing keys are overwritten)."""
+        if not updates:
+            return
+        self.migrate()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT metadata_json FROM entities WHERE entity_id = ?",
+                [entity_id],
+            ).fetchone()
+            if row is None:
+                return
+            metadata: dict[str, Any] = json.loads(str(row[0] or "{}"))
+            metadata.update(updates)
+            connection.execute(
+                "UPDATE entities SET metadata_json = ?, updated_at = now() WHERE entity_id = ?",
+                [json.dumps(metadata, ensure_ascii=False, sort_keys=True), entity_id],
+            )
+
     def merge_entity_evidence(
         self,
         entity_id: str,
@@ -930,7 +949,9 @@ class DuckDBLedgerRepository:
                   s.security_label,
                   COUNT(DISTINCT ev.span_id) AS evidence_count,
                   COUNT(DISTINCT pm.measurement_id) AS measurement_count,
-                  MAX(ir.status) AS run_status
+                  MAX(ir.status) AS run_status,
+                  s.year,
+                  s.geography
                 FROM sources s
                 LEFT JOIN evidence_spans ev ON ev.source_id = s.source_id
                 LEFT JOIN property_measurements pm ON pm.source_id = s.source_id
@@ -941,7 +962,8 @@ class DuckDBLedgerRepository:
                          ) AS rn
                   FROM ingestion_runs
                 ) ir ON ir.source_id = s.source_id AND ir.rn = 1
-                GROUP BY s.source_id, s.title, s.document_type, s.security_label, s.created_at
+                GROUP BY s.source_id, s.title, s.document_type, s.security_label,
+                         s.created_at, s.year, s.geography
                 ORDER BY s.created_at DESC, s.title
                 """
             ).fetchall()
@@ -954,6 +976,8 @@ class DuckDBLedgerRepository:
                 status=str(row[6]) if row[6] else "ledger",
                 evidence_count=int(row[4]),
                 measurement_count=int(row[5]),
+                year=None if row[7] is None else int(row[7]),
+                geography=None if row[8] is None else str(row[8]),
             )
             for row in rows
         ]
@@ -1031,6 +1055,33 @@ class DuckDBLedgerRepository:
             ).fetchall()
         return [self._evidence_from_row(row) for row in rows]
 
+    def list_evidence_spans_by_ids(self, span_ids: list[str]) -> list[EvidenceSpan]:
+        """Targeted rejoin for retrieval hits (never loads the full table)."""
+        if not span_ids:
+            return []
+        self.migrate()
+        placeholders = ", ".join("?" for _ in span_ids)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT
+                  span_id,
+                  source_id,
+                  artifact_id,
+                  span_type,
+                  visible_text,
+                  page,
+                  locator_json,
+                  validation_status,
+                  evidence_confidence,
+                  security_label
+                FROM evidence_spans
+                WHERE span_id IN ({placeholders})
+                """,
+                list(span_ids),
+            ).fetchall()
+        return [self._evidence_from_row(row) for row in rows]
+
     def _ensure_column(
         self,
         connection: duckdb.DuckDBPyConnection,
@@ -1050,10 +1101,64 @@ class DuckDBLedgerRepository:
         connection: duckdb.DuckDBPyConnection,
         source_id: str,
     ) -> None:
+        """Cascade delete: no graph row may keep citing removed spans.
+
+        Relations/entities strip the deleted span ids from their evidence;
+        rows whose evidence empties out are removed (dictionary-seeded
+        entities stay — their ids are stable and reseeded by migrations).
+        """
+        deleted_span_ids = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT span_id FROM evidence_spans WHERE source_id = ?", [source_id]
+            ).fetchall()
+        }
         connection.execute("DELETE FROM property_measurements WHERE source_id = ?", [source_id])
         connection.execute("DELETE FROM effect_claims WHERE source_id = ?", [source_id])
         connection.execute("DELETE FROM evidence_spans WHERE source_id = ?", [source_id])
         connection.execute("DELETE FROM sources WHERE source_id = ?", [source_id])
+        connection.execute("DELETE FROM extraction_claims WHERE source_id = ?", [source_id])
+        connection.execute("DELETE FROM ingestion_runs WHERE source_id = ?", [source_id])
+        if not deleted_span_ids:
+            return
+        for row in connection.execute(
+            "SELECT relation_id, evidence_span_ids_json FROM relations"
+        ).fetchall():
+            span_ids: list[str] = json.loads(str(row[1] or "[]"))
+            kept = [span_id for span_id in span_ids if span_id not in deleted_span_ids]
+            if len(kept) == len(span_ids):
+                continue
+            if kept:
+                connection.execute(
+                    "UPDATE relations SET evidence_span_ids_json = ? WHERE relation_id = ?",
+                    [json.dumps(kept, ensure_ascii=False), str(row[0])],
+                )
+            else:
+                connection.execute(
+                    "DELETE FROM relations WHERE relation_id = ?", [str(row[0])]
+                )
+        for row in connection.execute(
+            "SELECT entity_id, evidence_span_ids_json FROM entities"
+        ).fetchall():
+            entity_id = str(row[0])
+            span_ids = json.loads(str(row[1] or "[]"))
+            kept = [span_id for span_id in span_ids if span_id not in deleted_span_ids]
+            if len(kept) == len(span_ids):
+                continue
+            if kept or not entity_id.startswith("ent_"):
+                connection.execute(
+                    "UPDATE entities SET evidence_span_ids_json = ? WHERE entity_id = ?",
+                    [json.dumps(kept, ensure_ascii=False), entity_id],
+                )
+            else:
+                connection.execute(
+                    "DELETE FROM relations WHERE src_entity_id = ? OR dst_entity_id = ?",
+                    [entity_id, entity_id],
+                )
+                connection.execute(
+                    "DELETE FROM entity_aliases WHERE entity_id = ?", [entity_id]
+                )
+                connection.execute("DELETE FROM entities WHERE entity_id = ?", [entity_id])
 
     def _find_source(
         self,

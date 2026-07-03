@@ -45,7 +45,9 @@ export function DecisionsTimeline() {
               <CalendarClock size={15} />
             </div>
             <div>
-              <div className="timeline-date">{event.date ?? "без даты"}</div>
+              <div className="timeline-date">
+                {event.date ?? (event.year ? String(event.year) : "без даты")}
+              </div>
               <div className="timeline-title">{event.title}</div>
               <div className="source-meta">
                 {event.entity_type} · {event.evidence_span_ids.length} evidence

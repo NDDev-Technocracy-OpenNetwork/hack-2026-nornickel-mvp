@@ -113,7 +113,12 @@ export function ArtifactBankPanel({
             <div>
               <div className="source-title">{source.title}</div>
               <div className="source-meta">
-                {source.document_type} · {source.security_label} ·{" "}
+                {source.document_type} · {source.security_label}
+                {source.year ? ` · ${source.year}` : ""}
+                {source.geography
+                  ? ` · ${source.geography === "ru" ? "отечественный" : "зарубежный"}`
+                  : ""}{" "}
+                ·{" "}
                 <span className={statusChipClass(source.status)}>
                   {STATUS_LABELS[source.status] ?? source.status}
                 </span>

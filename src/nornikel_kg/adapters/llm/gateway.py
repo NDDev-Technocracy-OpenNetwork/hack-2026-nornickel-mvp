@@ -18,10 +18,12 @@ logger = logging.getLogger(__name__)
 
 
 def _strictify(schema: dict[str, Any]) -> dict[str, Any]:
-    """Recursively add additionalProperties=false to objects.
+    """Recursively enforce the OpenAI-compatible strict json_schema contract.
 
-    OpenAI-compatible strict json_schema mode rejects object schemas without
-    it; other providers ignore the field.
+    Strict mode rejects object schemas where `additionalProperties` is unset
+    OR where any `properties` key is missing from `required` — the second
+    rule silently broke every extraction call until schemas were audited.
+    Other providers ignore both fields.
     """
     result = dict(schema)
     if result.get("type") == "object":
@@ -32,6 +34,7 @@ def _strictify(schema: dict[str, Any]) -> dict[str, Any]:
                 name: _strictify(value) if isinstance(value, dict) else value
                 for name, value in properties.items()
             }
+            result["required"] = list(properties.keys())
     if result.get("type") == "array" and isinstance(result.get("items"), dict):
         result["items"] = _strictify(result["items"])
     return result
@@ -129,10 +132,18 @@ class LiteLLMGateway:
             raise LLMInvalidResponseError(f"empty completion from {model} for task '{task}'")
         try:
             content = json.loads(raw_content)
-        except json.JSONDecodeError as error:
-            raise LLMInvalidResponseError(
-                f"non-JSON completion from {model} for task '{task}': {raw_content[:200]}"
-            ) from error
+        except json.JSONDecodeError:
+            # Weak models wrap JSON in prose/markdown fences or drop commas;
+            # a deterministic repair pass recovers most of them.
+            import json_repair
+
+            repaired = json_repair.repair_json(raw_content, return_objects=True)
+            if not isinstance(repaired, dict):
+                raise LLMInvalidResponseError(
+                    f"non-JSON completion from {model} for task '{task}': {raw_content[:200]}"
+                ) from None
+            logger.info("Repaired malformed JSON completion for task '%s'", task)
+            content = repaired
         if not isinstance(content, dict):
             raise LLMInvalidResponseError(
                 f"JSON completion from {model} is not an object for task '{task}'"
