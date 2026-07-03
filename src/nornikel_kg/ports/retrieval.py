@@ -28,7 +28,10 @@ class RetrievalHit:
 
 class EmbeddingBackendPort(Protocol):
     def embed_dense(self, texts: list[str]) -> list[list[float]]:
-        """Dense vectors for texts (query and documents share one model)."""
+        """Dense DOCUMENT vectors for indexing."""
+
+    def embed_dense_query(self, texts: list[str]) -> list[list[float]]:
+        """Dense QUERY vectors (may be a separate model; often same as doc)."""
 
     def embed_sparse(self, texts: list[str]) -> list[SparseVector]:
         """Sparse lexical DOCUMENT vectors (BM25-style with term weights)."""
