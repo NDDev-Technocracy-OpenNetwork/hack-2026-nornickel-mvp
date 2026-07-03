@@ -18,7 +18,9 @@ from nornikel_kg.ports.parser import (
 
 logger = logging.getLogger(__name__)
 
-_SUPPORTED_EXTENSIONS = {".pdf", ".docx"}
+# .docm is the same OOXML container as .docx (macros are ignored by Docling);
+# the stream name is rewritten so format detection stays on the DOCX path.
+_SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".docm"}
 
 
 @lru_cache(maxsize=1)
@@ -50,7 +52,10 @@ class DoclingDocumentParser:
         from docling.datamodel.base_models import ConversionStatus, DocumentStream
 
         converter = _build_converter()
-        stream = DocumentStream(name=filename, stream=io.BytesIO(content))
+        stream_name = (
+            f"{Path(filename).stem}.docx" if extension == ".docm" else filename
+        )
+        stream = DocumentStream(name=stream_name, stream=io.BytesIO(content))
         try:
             result = converter.convert(stream, raises_on_error=True)
         except Exception as error:  # docling raises many concrete types

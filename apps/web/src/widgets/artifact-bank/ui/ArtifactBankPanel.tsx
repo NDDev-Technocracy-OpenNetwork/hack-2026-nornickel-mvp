@@ -74,9 +74,9 @@ export function ArtifactBankPanel({
       <form className="upload-row" onSubmit={handleSubmit}>
         <label className="file-control">
           <FileUp size={16} />
-          <span>{file ? file.name : "PDF / DOCX / CSV / Markdown"}</span>
+          <span>{file ? file.name : "PDF / DOCX / DOC / XLSX / CSV / MD"}</span>
           <input
-            accept=".pdf,.docx,.csv,.md,.markdown,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/csv,text/markdown,text/plain"
+            accept=".pdf,.docx,.docm,.doc,.xlsx,.xls,.csv,.md,.markdown,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/markdown,text/plain"
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             type="file"
           />

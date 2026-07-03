@@ -21,7 +21,9 @@ from nornikel_kg.ports.parser import (
 
 logger = logging.getLogger(__name__)
 
-PARSER_EXTENSIONS = {".pdf", ".docx"}
+PARSER_EXTENSIONS = {".pdf", ".docx", ".docm"}
+SPREADSHEET_EXTENSIONS = {".xlsx", ".xls"}
+LEGACY_DOC_EXTENSIONS = {".doc"}
 TEXT_EXTENSIONS = {".csv", ".md", ".markdown", ".txt", ".text"}
 
 
@@ -56,6 +58,8 @@ class IngestionService:
         self.repository = repository
         self._parser = parser
         self._url_fetcher = url_fetcher
+        self._spreadsheet_parser: DocumentParserPort | None = None
+        self._legacy_doc_parser: DocumentParserPort | None = None
         self.artifact_root = artifact_root
         self.extraction_service = extraction_service
         self.retrieval_service = retrieval_service
@@ -76,6 +80,22 @@ class IngestionService:
 
             self._url_fetcher = TrafilaturaUrlFetcher()
         return self._url_fetcher
+
+    @property
+    def spreadsheet_parser(self) -> DocumentParserPort:
+        if self._spreadsheet_parser is None:
+            from nornikel_kg.adapters.spreadsheet import SpreadsheetDocumentParser
+
+            self._spreadsheet_parser = SpreadsheetDocumentParser()
+        return self._spreadsheet_parser
+
+    @property
+    def legacy_doc_parser(self) -> DocumentParserPort:
+        if self._legacy_doc_parser is None:
+            from nornikel_kg.adapters.legacy_doc import LegacyDocParser
+
+            self._legacy_doc_parser = LegacyDocParser()
+        return self._legacy_doc_parser
 
     def ingest_upload(
         self,
@@ -108,6 +128,20 @@ class IngestionService:
             return self._with_run_status(response)
         if extension in PARSER_EXTENSIONS:
             return self._ingest_parsed(filename=filename, content=content, title=title)
+        if extension in SPREADSHEET_EXTENSIONS:
+            return self._ingest_parsed(
+                filename=filename,
+                content=content,
+                title=title,
+                parser=self.spreadsheet_parser,
+            )
+        if extension in LEGACY_DOC_EXTENSIONS:
+            return self._ingest_parsed(
+                filename=filename,
+                content=content,
+                title=title,
+                parser=self.legacy_doc_parser,
+            )
         raise SourceIngestError(f"Unsupported upload extension: {extension}")
 
     def ingest_url(self, url: str) -> SourceIngestResponse:
@@ -153,13 +187,15 @@ class IngestionService:
         filename: str,
         content: bytes,
         title: str | None,
+        parser: DocumentParserPort | None = None,
     ) -> SourceIngestResponse:
         source_id = source_id_from_bytes(content)
         raw_sha256 = hashlib.sha256(content).hexdigest()
         document_type = Path(filename).suffix.lower().lstrip(".")
         self._record_run(source_id=source_id, status="running", stage="parse")
+        active_parser = parser or self.parser
         try:
-            parsed = self.parser.parse(content=content, filename=filename)
+            parsed = active_parser.parse(content=content, filename=filename)
         except NoTextLayerError as error:
             self._quarantine(source_id, filename, raw_sha256, document_type, str(error))
             return self._response_for(source_id, warnings=[str(error)])

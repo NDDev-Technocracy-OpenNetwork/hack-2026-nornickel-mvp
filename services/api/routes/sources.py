@@ -91,7 +91,19 @@ def delete_source(source_id: str) -> dict[str, object]:
     return {"source_id": source_id, "deleted": True}
 
 
-_ALLOWED_UPLOAD_EXTENSIONS = {".csv", ".md", ".markdown", ".txt", ".text", ".pdf", ".docx"}
+_ALLOWED_UPLOAD_EXTENSIONS = {
+    ".csv",
+    ".md",
+    ".markdown",
+    ".txt",
+    ".text",
+    ".pdf",
+    ".docx",
+    ".docm",
+    ".doc",
+    ".xlsx",
+    ".xls",
+}
 _ALLOWED_MIME_TYPES = {
     ".csv": {
         "text/csv",
@@ -117,6 +129,19 @@ _ALLOWED_MIME_TYPES = {
         "application/octet-stream",
         "application/zip",
     },
+    ".docm": {
+        "application/vnd.ms-word.document.macroenabled.12",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/octet-stream",
+        "application/zip",
+    },
+    ".doc": {"application/msword", "application/octet-stream"},
+    ".xlsx": {
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/octet-stream",
+        "application/zip",
+    },
+    ".xls": {"application/vnd.ms-excel", "application/octet-stream"},
 }
 
 
@@ -130,8 +155,8 @@ async def upload_source(file: Annotated[UploadFile, File(...)]) -> SourceIngestR
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Unsupported upload type. "
-                "Allowed: .csv, .md, .markdown, .txt, .text, .pdf, .docx"
+                "Unsupported upload type. Allowed: "
+                ".csv, .md, .markdown, .txt, .text, .pdf, .docx, .docm, .doc, .xlsx, .xls"
             ),
         )
     if file.size is not None and file.size > max_upload_bytes:
