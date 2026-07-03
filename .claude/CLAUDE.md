@@ -42,8 +42,8 @@ Owner workflow: rldyour plugins/skills.
 - Synthetic fixture path defaults to `sample_docs/synthetic`.
 
 ## Validation and deployment notes
-- Primary stand: `https://изи-никель.рф` (punycode `xn----jtbedbbojo8m.xn--p1ai`;
-  alias `https://nornikel.nddev.asia`) on `ssh curestry` (compose project
+- Primary stand: `https://изи-никель.рф` (punycode `xn----jtbedbbojo8m.xn--p1ai`);
+  mirror: `https://nornikel.nddev.asia` (secondary). Host `ssh curestry` (compose project
   `/srv/nornikel-kg-search`; TLS via host nginx-proxy + acme-companion; Langfuse v3 in
   `/srv/langfuse` reachable over the external `lf-net` network). Deploy contract:
   `docs/deployment/nornikel-nddev.md`. Interim mirror: `fa.nddev.asia`

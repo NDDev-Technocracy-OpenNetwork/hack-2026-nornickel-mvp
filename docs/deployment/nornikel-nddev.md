@@ -4,8 +4,8 @@ Target host:
 
 ```text
 ssh curestry            # 165.22.203.232, 8 vCPU / 31 GiB
-public URL: https://изи-никель.рф  (punycode: xn----jtbedbbojo8m.xn--p1ai)
-alias:      https://nornikel.nddev.asia
+primary:  https://изи-никель.рф  (punycode: xn----jtbedbbojo8m.xn--p1ai)
+mirror:   https://nornikel.nddev.asia  (secondary, kept alive)
 ```
 
 DNS prerequisite for the primary domain: an A record for
