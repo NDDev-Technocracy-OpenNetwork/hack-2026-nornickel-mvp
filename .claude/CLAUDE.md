@@ -14,13 +14,17 @@ Owner workflow: rldyour plugins/skills.
   Plans amend `.serena/newproj/nornikel-kg-search/18_IMPLEMENTATION_SPEC.md`.
 
 ## LLM Constraints (hackathon rules)
-- Baseline rule: open-weight models usable from Russia. **Exception granted:
-  organizers explicitly approved `gpt-5.4-mini` for this team (owner confirmation,
-  2026-07-03) — it is the configured stand model.** Fallback if the approval changes:
-  `deepseek-v3.2-251201` (verified open weights), a one-line `.env` edit.
-- Provider: dataeyes.ai key through the LiteLLM SDK, base `https://platform.dataeyes.ai/v1`.
-  Optional Ollama fallback. Observability: self-hosted Langfuse.
-- CI never needs LLM secrets or network: all LLM paths must keep deterministic fakes.
+- **Primary provider (2026-07-03): Yandex AI Studio, organizer-provided** (API key +
+  folder, no spend limits) — OpenAI-compatible base `https://ai.api.cloud.yandex.net/v1`
+  through the LiteLLM SDK. Stand models: `aliceai-llm` for extraction AND answers
+  (live-benched: strict-JSON extraction 2.4s, best RU quality; catalog also hosts
+  open-weight qwen3-235b/deepseek-v4-flash/gpt-oss as fallbacks). Dense embeddings:
+  `emb://<folder>/text-embeddings/latest` (1536-dim) via `EMBEDDING_BACKEND=yandex`;
+  sparse BM25 stays local. Embedding quota 10 RPS (raisable via support ticket).
+- Previous provider (dataeyes.ai + gpt-5.4-mini, organizer-approved) is preserved in
+  the server's `.env.bak-dataeyes` — rollback is an env swap.
+- CI never needs LLM secrets or network: all LLM paths must keep deterministic fakes;
+  `EMBEDDING_BACKEND=fake|local` keeps retrieval offline-testable.
 
 ## Durable Commands
 - Backend checks: `uv run ruff check .`, `uv run mypy`, `uv run pytest`.

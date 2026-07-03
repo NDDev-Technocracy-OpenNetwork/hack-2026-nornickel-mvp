@@ -96,12 +96,13 @@ Run repository-local validation scripts when present.
   (USER-bge-m3 + BM25, RRF), LLM answer synthesis gated by the claim verifier with a
   deterministic fallback, conflict detector, gaps matrix, and `sample_docs/synthetic_v2/`
   corpus (17 sources + manifest).
-- Remaining gaps: working dataeyes AI-Models key (W0.1 discovery blocked; `LLM_ENABLED=false`
-  everywhere until then), embedding fallback inside entity resolution, decisions-timeline
-  entities require dated extraction.
+- Remaining gaps: real-corpus gold eval set, geomechanics ontology coverage, CI without
+  the `ingest` extra (GLiNER/Docling/spreadsheet paths untested there).
 - Implementation plan package (2026-07-02): `.serena/plans/00_PLAN_INDEX.md` (waves W0-W5)
   plus `.serena/reviews/` (critical review, research evidence register). Plans amend
   `18_IMPLEMENTATION_SPEC.md`; scope/decision precedence is `.serena/plans/01_MVP_SCOPE_AND_DECISIONS.md`.
-- Hackathon LLM constraint: OpenAI/Anthropic APIs forbidden; only open-weight models
-  (provider dataeyes.ai via LiteLLM SDK, optional Ollama fallback); Langfuse self-host
-  for observability; CI stays offline with deterministic LLM fakes.
+- LLM provider (2026-07-03): organizer-provided Yandex AI Studio via the LiteLLM SDK
+  (OpenAI-compatible base `https://ai.api.cloud.yandex.net/v1`, stand model
+  `aliceai-llm`, dense embeddings `text-embeddings` 1536-dim with
+  `EMBEDDING_BACKEND=yandex`); previous dataeyes config kept as server-side backup.
+  Langfuse self-host for observability; CI stays offline with deterministic LLM fakes.
