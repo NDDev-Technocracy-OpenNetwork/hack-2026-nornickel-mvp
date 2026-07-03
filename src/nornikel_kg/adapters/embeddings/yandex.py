@@ -44,8 +44,8 @@ class YandexEmbeddingBackend:
         query_model: str | None = None,
         max_workers: int = 8,
     ) -> None:
-        self.api_key: str = api_key or os.getenv("YANDEX_API_KEY", "")
-        self.folder_id: str = folder_id or os.getenv("YANDEX_FOLDER_ID", "")
+        self.api_key: str = api_key if api_key else os.getenv("YANDEX_API_KEY", "")
+        self.folder_id: str = folder_id if folder_id else os.getenv("YANDEX_FOLDER_ID", "")
         if not self.api_key or not self.folder_id:
             raise ValueError("YandexEmbeddingBackend needs YANDEX_API_KEY and YANDEX_FOLDER_ID")
         doc = doc_model or os.getenv("YANDEX_EMBED_DOC_MODEL", _DEFAULT_MODEL)
