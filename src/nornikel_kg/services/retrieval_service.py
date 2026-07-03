@@ -46,7 +46,13 @@ class RetrievalService:
     def enabled(self) -> bool:
         return self.index is not None
 
-    def index_source(self, source_id: str, *, include_entities: bool = True) -> int:
+    def index_source(self, source_id: str, *, include_entities: bool = False) -> int:
+        """Index one source's spans; entity re-embedding is opt-in.
+
+        Per-source enrichment must NOT re-embed the whole entities collection
+        (that quadratic pattern once stalled the stand for hours);
+        `reindex_all` refreshes entities once at the end instead.
+        """
         if self.index is None:
             return 0
         spans = self.repository.list_evidence_spans(source_id)
