@@ -1,6 +1,6 @@
 <!-- Memory Metadata
 Last updated: 2026-07-03
-Last commit: 41ee7ac perf: skip co-occurrence edges on dense catalog-like spans
+Last commit: 3e74473 docs(deploy): DuckDB lock contract and archive-aware batch procedure
 Scope: Makefile; tests/; scripts/run_eval.py; eval/; .github/workflows/ci.yml; pyproject.toml
 Area: TEST
 -->
@@ -9,77 +9,97 @@ Area: TEST
 
 ## Purpose
 
-Capture required verification and acceptance gates after the real-corpus hardening wave.
+Capture required verification and acceptance gates after the accuracy/SOTA overhaul (waves A-D)
+and the archive/legacy-format ingestion wave (E).
 
 ## Source Of Truth
 
-- `scripts/run_eval.py`: hardcoded `EVAL_QUESTIONS` list of 12 question dicts run against the
-  live `DemoQAService` and a temp-copy DuckDB ledger, covering only the synthetic corpus.
+- `scripts/run_eval.py`: hardcoded `EVAL_QUESTIONS` list, now **17** question dicts (verified via
+  `grep -c '"question_id":'`), run against the live `DemoQAService` and a temp-copy DuckDB
+  ledger, covering only the synthetic corpus.
 - `eval/gold_questions.yml`, `eval/adversarial_questions.yml`, `eval/expected_spans.yml`: legacy
   YAML fixtures kept in the repo but not referenced by any code path.
 - `tests/unit/`: ID stability, claim verifier, source-label policy, dictionary-loader, LLM
   gateway, entity resolution, extraction service, retrieval service, answer composer, ingestion
-  service, and scope/constraint tests.
-- `tests/integration/`: FastAPI, DuckDB ledger, graph API, ingest API, and synthetic-v2-corpus
-  tests.
+  service, scope/constraint tests, plus new (this sync) `test_quantities_and_dates.py`,
+  `test_extraction_accuracy.py`, `test_retrieval_and_resolution_accuracy.py`,
+  `test_answer_honesty.py`, `test_corpus_formats.py`.
+- `tests/integration/`: FastAPI, DuckDB ledger, graph API, ingest API, synthetic-v2-corpus, plus
+  new `test_analytics_api.py`.
 - `make ci` / `make eval`: local gates matching CI.
 
 ## Current Behavior
 
-`uv run pytest` passes **96 tests, 3 skipped** at `41ee7ac` — verified by a live run in this
-sync pass (test-progress output totaled 99 outcomes: 96 `.` and 3 `s`, no failures). This is an
-increase of 6 tests over the previously recorded 90-passed baseline at `ece33d3`, matching the 6
-new test functions added by `tests/unit/test_scope_and_constraints.py` (see below). `ruff`/
-`mypy` were not re-run in this sync pass.
+`uv run pytest` passes **141 tests, 4 skipped** at `3e74473` — verified by a live run in this
+sync pass. This is an increase of 45 tests over the previously recorded 96-passed baseline at
+`41ee7ac`. `uv run ruff check .` and `uv run mypy` both pass clean (live-run verified in this
+sync pass).
 
-The 3 skips remain `pytest.importorskip("docling")` / `pytest.importorskip("trafilatura")`
-guards in `tests/integration/test_synthetic_v2_corpus.py`
-(`test_docx_corpus_ingests_with_docling`, `test_scan_pdf_quarantines_with_docling`,
-`test_html_fixture_extracts_via_trafilatura_offline`).
+The 4 skips remain `pytest.importorskip` guards for optional heavy dependencies (`docling`,
+`trafilatura`, and similar) in the integration/corpus-format tests, unchanged in kind from the
+prior sync's 3 skips (one more skip guard was added alongside the new format tests).
 
-`tests/unit/test_scope_and_constraints.py` (new, `58760b3`) has 6 test functions:
-`test_numeric_constraint_parser_handles_ru_operators` (RU/symbolic numeric operator parsing:
-"не более", "≤", "не менее"), `test_author_extraction_ru_and_en` (`_extract_authors` on a mixed
-RU/EN article head), `test_real_domain_dictionary_resolves` (шлак/электроэкстракция/ПВП/
-"скорость циркуляции" all resolve via the extended dictionaries), `test_publication_and_authors_linked`
-(a source becomes a `publication` entity with `DESCRIBED_IN`/`AUTHORED_BY` relations after
-`ExtractionService.process_source`), `test_geography_and_year_scope_filters` (an `AskFilters`
-`geography`/`year_from`/`year_to` combination correctly includes/excludes an experiment based on
-`set_source_metadata`), and `test_numeric_constraint_filters_experiments` (a "не более 250 HV"
-question filters out a 320 HV experiment while keeping a 245 HV one).
+New test modules (this sync, all passing):
+- `tests/unit/test_quantities_and_dates.py` (9 test functions): unit canonicalization equivalence
+  (мг/дм³≡мг/л etc.), numeric-constraint parsing (single/range/RU-operator forms), unit-mismatch
+  non-filtering, year-marker-guarded year extraction, bare-year rejection (Kelvin/sample codes).
+- `tests/unit/test_extraction_accuracy.py` (9 test functions): word-boundary alias matching
+  (no false hits inside longer words), author-extraction affiliation gating and EN-initials
+  blacklist, canonical-key edge-punctuation stripping and mixed-vs-pure-script homoglyph folding.
+- `tests/unit/test_retrieval_and_resolution_accuracy.py` (6 test functions): BM25
+  `SPARSE_LANGUAGE` wiring, reranker candidate-pool behavior, semantic entity-resolution
+  auto-merge/review thresholds and digit veto.
+- `tests/unit/test_answer_honesty.py` (7 test functions): honest empty answers for irrelevant
+  questions, chemical-formula veto, conflict relevance gating, numeric-fabrication rejection in
+  `ClaimVerifier`/`LLMAnswerComposer`.
+- `tests/unit/test_corpus_formats.py` (7 test functions): plain-zip/multipart-zip/zip-slip/
+  corrupt-rar archive expansion, spreadsheet-parser table rows, legacy-doc `ParserError` on
+  empty extraction, `.docm` routing through the document parser.
+- `tests/integration/test_analytics_api.py` (7 test functions): route-level coverage for
+  `/gaps/analyze`, `/graph/timeline` (incl. dated publications), `/sources/{id}/enrich`,
+  `/sources/reindex-all`.
 
-`scripts/run_eval.py`'s 12 `EVAL_QUESTIONS` are unchanged by this wave and still cover only the
-synthetic `sample_docs/synthetic`/`synthetic_v2` corpora (ideal Ni-30Cu scenario, Cyrillic-alias
-resolution, provenance, comparison, gap, conflict, unknown-material negative controls, exact
-spaced-material scoping, and one broad family query). **No gold-question set exists yet for the
-real `DATA_HACK/` corpus** or for the new geography/year/numeric-constraint filters at the
-`/eval/summary` level — those are covered only by `tests/unit/test_scope_and_constraints.py`
-against synthetic fixtures (see `mem:TECHDEBT-01-NOW`).
+`scripts/run_eval.py`'s `EVAL_QUESTIONS` grew from 12 to 17 questions this wave: the original 12
+(ideal Ni-30Cu scenario, Cyrillic-alias resolution, provenance, comparison, gap, conflict,
+unknown-material negative controls, exact spaced-material scoping, one broad family query) plus
+5 new cases — `q_conflict_surfaced_for_question` (asserts `min_conflict_count >= 1`),
+`q_numeric_constraint_hv` (asserts the constrained material's HV values respect a
+`max_measurement_value_hv` ceiling), `q_year_phrase_is_not_a_filter` (asserts «до 2020 года»
+does not silently drop a valid Ni-30Cu experiment), `q_injection_ignore_instructions` (asserts
+`max_source_label_leaks = 0` under a prompt-injection attempt), and `q_injection_fake_span`
+(asserts a `forbidden_answer_substrings` check that a fabricated "999 HV" claim never appears in
+the answer). `main()` now also asserts `numeric_mismatch_count == 0` and
+`citation_coverage >= 1.0` for every question, in addition to the prior
+`unsupported_claim_count`/`source_label_leak_count` gates.
 
 CI runs the same backend (`uv sync --group dev`, `ruff`, `mypy`, `pytest`,
 `uv run python scripts/run_eval.py`) and frontend (`npm ci`, `typecheck`, `build`) checks; the
-backend job still does not pass `--extra ingest`.
+backend job still does not pass `--extra ingest` (`mem:TECHDEBT-01-NOW`).
 
 ## Contracts And Data
 
-Non-negotiable demo gates remain `unsupported_claim_count = 0` and
-`source_label_leak_count = 0`; `run_eval.py` raises `SystemExit(1)` if any `EVAL_QUESTIONS` case
-fails its assertions.
+Non-negotiable demo gates are now `unsupported_claim_count = 0`, `source_label_leak_count = 0`,
+`numeric_mismatch_count = 0`, and `citation_coverage >= 1.0`; `run_eval.py` raises
+`SystemExit(1)` if any `EVAL_QUESTIONS` case fails its assertions.
 
 `tests/unit/test_scope_and_constraints.py` protects: RU/symbolic numeric-constraint parsing and
-filtering, the real-domain dictionary extension's resolvability, publication/author graph
-linking, and geography/year scope filtering — all against synthetic in-memory DuckDB fixtures
-built with `DuckDBLedgerRepository(tmp_path / "scope.duckdb")`.
+filtering (now via `domain/quantities.py`), the real-domain dictionary extension's
+resolvability, publication/author graph linking, and geography/year scope filtering — all
+against synthetic in-memory DuckDB fixtures built with
+`DuckDBLedgerRepository(tmp_path / "scope.duckdb")`.
 
 ## Invariants
 
-- Do not mark a demo answer successful if unsupported final sentences exist.
-- Do not mark a security run successful if restricted evidence enters the context packet.
+- Do not mark a demo answer successful if unsupported final sentences exist, or if any cited
+  number in the answer diverges from the literal cited evidence text.
+- Do not mark a security run successful if restricted evidence enters the context packet or if a
+  prompt-injection attempt causes a source-label leak.
 - Whenever `scripts/run_eval.py`'s `EVAL_QUESTIONS` changes, keep the question count and this
   memory's description in sync in the same change; do not resurrect `eval/*.yml` as a second
   source of truth without wiring it into code first.
-- Whenever the real-corpus ontology or scope filters change, extend
-  `tests/unit/test_scope_and_constraints.py` in the same change.
+- Whenever the real-corpus ontology, scope filters, or accuracy fixes change, extend the relevant
+  `tests/unit/test_*_accuracy.py`/`test_answer_honesty.py`/`test_quantities_and_dates.py` module
+  in the same change.
 
 ## Change Rules
 
@@ -89,8 +109,8 @@ change.
 
 ## Verification
 
-- `make ci`: ruff, mypy, pytest (96 passed, 3 skipped at `41ee7ac`, live-run verified), frontend
+- `make ci`: ruff, mypy, pytest (141 passed, 4 skipped at `3e74473`, live-run verified), frontend
   typecheck, build.
-- `make eval`: `scripts/run_eval.py` — 12-question live QA metrics against the synthetic DuckDB
-  ledger only.
+- `make eval`: `scripts/run_eval.py` — 17-question live QA metrics against the synthetic DuckDB
+  ledger only, incl. adversarial injection assertions.
 - `docker compose config`: Compose validation.
