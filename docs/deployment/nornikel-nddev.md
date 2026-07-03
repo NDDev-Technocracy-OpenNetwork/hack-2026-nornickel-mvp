@@ -42,10 +42,29 @@ Three isolated Docker Compose projects run on the host:
 git archive main | ssh curestry 'tar -x -C /srv/nornikel-kg-search'
 ssh curestry 'cd /srv/nornikel-kg-search \
   && docker compose -f docker-compose.server.yml build api web \
-  && docker compose -f docker-compose.server.yml up -d \
-  && docker compose -f docker-compose.server.yml exec -T api python scripts/warmup.py \
-  && docker compose -f docker-compose.server.yml exec -T api python scripts/reindex.py'
+  && docker compose -f docker-compose.server.yml up -d'
+# vector reindex goes THROUGH the api (it owns the DuckDB lock):
+curl -fsS -X POST https://nornikel.nddev.asia/api/sources/reindex-all
 ```
+
+## DuckDB lock contract (important)
+
+The api process holds one persistent DuckDB write connection for its whole
+lifetime. Anything that opens `data/catalog.duckdb` directly (batch ingester,
+`run_eval.py --store`, ad-hoc DuckDB shells) is mutually exclusive with a
+running api — stop the api container for that window:
+
+```bash
+ssh curestry 'cd /srv/nornikel-kg-search \
+  && docker compose -f docker-compose.server.yml stop api \
+  && docker compose -f docker-compose.server.yml run --rm --no-deps -T api \
+       python scripts/ingest_corpus.py --dir data/corpus --max-mb 25 \
+  && docker compose -f docker-compose.server.yml up -d'
+```
+
+The batch ingester expands archives first (.zip, multipart .zip.001/.002,
+.rar via bsdtar) and handles .pdf/.docx/.docm/.doc/.xlsx/.xls/.csv/.md/.txt;
+images are counted as no-OCR skips.
 
 Smoke:
 
