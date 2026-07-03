@@ -1,8 +1,35 @@
 # Accuracy / SOTA Overhaul Plan (Waves A-D)
 
 Date: 2026-07-03. Goal: maximum output-data accuracy for the track jury.
-Status: waves A-D implemented and merged (PR #15, commits 41b3acd/944e6f0/
-93f3f87/12bc5c1 + b7b12d6); stand deploy with graph rebuild in progress.
+Status: waves A-E implemented, merged (PR #15, #16) and deployed 2026-07-03.
+
+## Deploy results (measured on the stand, 2026-07-03)
+
+- Graph rebuilt from scratch: polluted 1727 entities / 13408 co-occurrence
+  relations wiped; re-enriched with word-boundary scan; full Qdrant reindex
+  with russian BM25 (10k+ points) done.
+- **Reranker verdict: OFF on this stand.** bge-reranker-v2-m3 measured 58 s
+  warm per question (30 pairs, 8 shared vCPU, ONNX unquantized export 153 s
+  cold) vs 8.4 s without — fails the latency budget; retrieval precision is
+  carried by russian BM25 + title-context + honest rejoin. Revisit only with
+  int8 quantization or gte-multilingual-reranker-base (306M).
+- **LLM extraction (strict schema fix) verified live**: one real .doc source
+  -> 132 entities, 151 typed relations, ZERO schema-invalid payloads
+  (previously 100% rejected). LLM_EXTRACTION_ENABLED=true on the stand;
+  mass corpus enrichment launched (staggered, ~770 calls).
+- Warm QA latency: **8.4 s** with LLM synthesis (was ~32 s).
+- Eval run eval_1783081424 stored: 17 questions, citation 1.0, 0 numeric
+  mismatches, 0 leaks, injections ignored.
+- Timeline: 18 events, all dated (publication year/date extraction works).
+- Wave E formats verified on real corpus files: multipart .zip.001+.002 ->
+  journal PDF (2026 spans), .rar via bsdtar (3 members), .xls (667 spans),
+  .xlsx (144), .doc via antiword (2 sources); one non-standard .docm
+  honestly quarantined by the Docling backend.
+- Ops: `docker compose restart` does NOT re-read .env — use `up -d` to apply
+  env changes; batch ingester and the api are mutually exclusive on the
+  DuckDB lock (documented in docs/deployment/nornikel-nddev.md).
+- curestry platform reduced to nginx-proxy + acme + landing (frees ~5 GiB
+  RAM + ~1 CPU core for this project).
 Inputs: 4 deep audits (GLiNER2 research, SOTA stack research, backend accuracy
 audit, eval/CI/frontend audit), all claims verified against code and primary
 sources (HF cards, Qdrant/Docling/LiteLLM docs, arXiv, GitHub issues).
