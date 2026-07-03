@@ -97,6 +97,9 @@ class RetrievalService:
             total += self._index_entities()
         except Exception:
             logger.warning("Entity indexing failed; resolution fallback degraded", exc_info=True)
+        # Ops marker: deploy tooling greps for this exact line to know the
+        # rebuild finished (points-count heuristics fire false positives).
+        logger.info("Reindex complete: %d units", total)
         return total
 
     def _index_entities(self) -> int:

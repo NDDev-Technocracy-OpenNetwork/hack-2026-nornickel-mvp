@@ -2,12 +2,39 @@ from __future__ import annotations
 
 import logging
 import os
+import random
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 from nornikel_kg.ports.retrieval import SparseVector
 
 logger = logging.getLogger(__name__)
+
+
+class _RateLimiter:
+    """Process-wide min-interval limiter for the shared folder quota.
+
+    Retry-with-backoff alone loses against a saturated 10 RPS quota (all
+    attempts land in 429 when many threads fire concurrently — observed
+    live); pacing requests below the quota at the source is the fix.
+    """
+
+    def __init__(self, requests_per_second: float) -> None:
+        self._interval = 1.0 / max(requests_per_second, 0.1)
+        self._lock = threading.Lock()
+        self._next_slot = 0.0
+
+    def acquire(self) -> None:
+        with self._lock:
+            now = time.monotonic()
+            wait = self._next_slot - now
+            self._next_slot = max(self._next_slot, now) + self._interval
+        if wait > 0:
+            time.sleep(wait)
+
+
+_rate_limiter = _RateLimiter(float(os.getenv("YANDEX_EMBED_RPS", "8")))
 
 # Canonical AI Studio host (docs, 2026-06): ai.api.cloud.yandex.net; the old
 # llm.api host still answers but is the legacy alias.
@@ -17,7 +44,7 @@ _API_URL = "https://ai.api.cloud.yandex.net/foundationModels/v1/textEmbedding"
 # (text-embeddings-v2-doc/-query, text-search-doc/-query) stay available
 # through the env overrides.
 _DEFAULT_MODEL = "text-embeddings/latest"
-_MAX_RETRIES = 4
+_MAX_RETRIES = 7
 _TIMEOUT_S = 30.0
 # Documented input cap is 2048 tokens (v1 wording; compat ref says 8192).
 # Russian text ≈ 2-3 chars/token on the Yandex tokenizer — 4000 chars stays
@@ -80,6 +107,7 @@ class YandexEmbeddingBackend:
         last_error: Exception | None = None
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
+                _rate_limiter.acquire()
                 response = httpx.post(
                     _API_URL,
                     json=payload,
@@ -103,8 +131,9 @@ class YandexEmbeddingBackend:
                     str(error)[:100],
                     delay,
                 )
-                time.sleep(delay)
-                delay *= 2
+                # Jitter prevents retry stampedes across concurrent workers.
+                time.sleep(delay + random.uniform(0, delay / 2))
+                delay = min(delay * 2, 20.0)
         raise RuntimeError(f"Yandex embedding failed after {_MAX_RETRIES} attempts") from last_error
 
     # -- sparse (local fastembed, same as LocalEmbeddingBackend) ------------
