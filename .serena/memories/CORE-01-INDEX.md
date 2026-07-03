@@ -27,7 +27,7 @@ Index the durable project knowledge for the Nornikel Materials KG Search hackath
   exclusive with a running `api` container — see `mem:RELEASE-01-VALIDATION`).
 - `eval/`: legacy YAML gold/adversarial fixtures; not read by any code path (`mem:TEST-01-EVALUATION-GATES`).
 - `sample_docs/synthetic/`: original P0 fixture. `sample_docs/synthetic_v2/`: W5 17-source synthetic corpus with `manifest.json`.
-- `tests/`: unit and integration tests (148 passed, 5 skipped at `327f47c`, live-run verified).
+- `tests/`: unit and integration tests (151 passed, 5 skipped at `652317e`, live-run verified).
 - `docs/deployment/nornikel-nddev.md`: primary live-stand deployment contract.
 - `.serena/plans/08_TRACK_FULL_REQUIREMENTS_AND_GAPS.md`: full-track requirement brief («Научный
   клубок») and gap analysis G1-G10 against the real `DATA_HACK/` corpus.
@@ -126,10 +126,17 @@ resilience/perf/UI follow-on, all verified against the working tree at `327f47c`
   as PR #19): new `.github/workflows/deploy.yml` ships the tracked tree over SSH on every push
   to `main`, rebuilds `api`/`web`, restarts the stack and smoke-checks `/api/health` +
   `/api/stats/overview` (secrets `DEPLOY_SSH_KEY`/`DEPLOY_HOST`/`DEPLOY_USER`,
-  concurrency-guarded). Primary stand domain is now `https://изи-никель.рф` (punycode
-  `xn----jtbedbbojo8m.xn--p1ai`), with `https://nornikel.nddev.asia` kept as an alias;
-  `.claude/CLAUDE.md`/`docs/deployment/nornikel-nddev.md` document the DNS prerequisite (A
-  record to `165.22.203.232`).
+  concurrency-guarded, group `deploy-production`). Primary stand domain is now
+  `https://изи-никель.рф` (punycode `xn----jtbedbbojo8m.xn--p1ai`), with
+  `https://nornikel.nddev.asia` kept as a secondary mirror (`.claude/CLAUDE.md`/
+  `docs/deployment/nornikel-nddev.md`, `ec79a96` corrected "alias" wording to "mirror").
+  `.env.example`'s `APP_BASE_URL` now defaults to `https://изи-никель.рф`. Both docs record a DNS
+  prerequisite: an A record for `изи-никель.рф`/`www` pointing at `165.22.203.232`, after which
+  the host's acme-companion issues the certificate automatically. Per the launching
+  coordinator's report (not independently verifiable from any tracked artifact in this
+  repository — no DNS-status file exists in the tree): the A records had not yet been created by
+  the domain owner as of this sync, so the new primary domain does not yet resolve/serve; treat
+  this as an unverified operational note, not a proven fact (see `mem:TECHDEBT-01-NOW`).
 
 See `mem:ARCH-01-EVIDENCE-MVP`, `mem:DATA-01-EVIDENCE-LEDGER`, `mem:TECHDEBT-01-NOW` for the
 per-module detail of each change.

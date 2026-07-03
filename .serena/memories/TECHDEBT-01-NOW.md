@@ -226,6 +226,14 @@ change.
 
 ## Known Gaps
 
+- **`изи-никель.рф` primary domain may not resolve yet (unverified operational note, dated
+  2026-07-04)**: `.claude/CLAUDE.md`/`docs/deployment/nornikel-nddev.md` document the DNS
+  prerequisite (an A record for `изи-никель.рф`/`www` -> `165.22.203.232`; the host's
+  acme-companion issues the TLS certificate automatically once the name resolves), but neither
+  tracked file states whether that A record has already been created. Per the launching
+  coordinator's report (not verifiable from any tracked artifact — no DNS-status file exists in
+  this repository), the record had not yet been created by the domain owner as of this sync.
+  `https://nornikel.nddev.asia` remains the working mirror in the meantime.
 - **Geomechanics domain not covered by the ontology**: the dictionary extension (`58760b3`,
   unchanged this sync) added pyrometallurgy/electrowinning/flotation/desalination terms but no
   geomechanics-specific materials/regimes (verified: no matching alias hits in any dictionary
