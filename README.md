@@ -1,5 +1,9 @@
 # Nornikel Materials KG Search
 
+> **DEPRECATED.** This repository is archived and no longer maintained.
+> It is kept read-only for reference; its GDS anchor records
+> `lifecycle: archived` under `portfolio:archived-projects`.
+
 Evidence-first materials research workbench for the Nornikel hackathon.
 
 The P0 product promise is:
