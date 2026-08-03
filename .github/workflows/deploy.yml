@@ -1,5 +1,10 @@
 name: deploy
 
+# Disabled: this repository is archived. Production deploys are not run from
+# archived repositories. Re-enable by removing the `if: false` below only if
+# the repo is unarchived and DEPLOY_SSH_KEY/DEPLOY_HOST/DEPLOY_USER secrets
+# are re-provisioned.
+
 on:
   push:
     branches: [main]
@@ -11,10 +16,11 @@ concurrency:
 
 jobs:
   deploy:
+    if: false  # archived repo — no deploy
     runs-on: [self-hosted, Linux, X64, server-nddev-amsterdam]
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@1e31de5234b9f8995739874a8ce0492dc87873e2  # v4.0.0
 
       - name: Prepare SSH
         run: |

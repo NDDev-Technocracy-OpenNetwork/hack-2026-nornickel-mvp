@@ -1,32 +1,45 @@
 name: CI
 
+# CI for hack-2026-nornikel-mvp (archived). Runs on the estate self-hosted
+# runner (server-nddev-amsterdam). The run_eval.py step is excluded — it
+# requires live LLM API keys and is slow; not relevant for an archived repo.
+
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   backend:
     runs-on: [self-hosted, Linux, X64, server-nddev-amsterdam]
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v7
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7.6.0
         with:
           enable-cache: true
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c  # v6.0.0
         with:
           python-version: "3.12"
       - run: uv sync --group dev
       - run: uv run ruff check .
       - run: uv run mypy
       - run: uv run pytest
-      - run: uv run python scripts/run_eval.py
 
   frontend:
     runs-on: [self-hosted, Linux, X64, server-nddev-amsterdam]
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903  # v6.0.0
         with:
           node-version: "24"
           cache: npm
