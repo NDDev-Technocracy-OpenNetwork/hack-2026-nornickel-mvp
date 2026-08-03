@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, server-nddev-amsterdam]
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
