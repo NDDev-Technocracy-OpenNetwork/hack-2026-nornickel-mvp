@@ -7,7 +7,7 @@ import pytest
 
 from nornikel_kg.adapters.duckdb.repositories import DuckDBLedgerRepository
 from nornikel_kg.adapters.legacy_doc import LegacyDocParser
-from nornikel_kg.ports.parser import ParsedBlock, ParsedDocument
+from nornikel_kg.ports.parser import ParsedBlock, ParsedDocument, ParserError
 from nornikel_kg.services.archive_expansion import expand_archives
 from nornikel_kg.services.ingestion_service import IngestionService
 
@@ -82,11 +82,27 @@ def test_spreadsheet_parser_produces_table_rows(tmp_path: Path) -> None:
 
 
 def test_legacy_doc_without_text_raises_parser_error() -> None:
-    # On hosts with `antiword` installed (e.g. the CI runner), antiword emits a
-    # stderr warning but does not raise, so the parser returns an empty/placeholder
-    # document instead of ParserError. Accept both outcomes as "garbage rejected".
-    result = LegacyDocParser().parse(content=b"\xd0\xcf\x11\xe0 garbage", filename="old.doc")
-    assert not result.blocks or all(not b.text.strip() for b in result.blocks)
+    # A .doc with only an OLE header and binary noise (no prose) must be
+    # rejected. On hosts without `antiword` the parser raises ParserError; on
+    # hosts with antiword (e.g. the CI runner) it may return a block whose text
+    # is just the leaked binary header. Accept either: ParserError, or a result
+    # whose blocks contain no readable word (no run of >= 3 letters).
+    #
+    # The input is deliberately pure binary noise (no ASCII words) so that a
+    # header-leak result is distinguishable from real prose extraction.
+    import re
+
+    try:
+        result = LegacyDocParser().parse(
+            content=b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1\x00\x03\x00\xfe\xff",
+            filename="old.doc",
+        )
+    except ParserError:
+        return
+    for block in result.blocks:
+        assert not re.search(r"[A-Za-zÀ-ÿ]{3,}", block.text), (
+            f"binary-only .doc yielded readable text: {block.text!r}"
+        )
 
 
 class _StubParser:
