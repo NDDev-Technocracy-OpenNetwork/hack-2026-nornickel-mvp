@@ -7,7 +7,7 @@ import pytest
 
 from nornikel_kg.adapters.duckdb.repositories import DuckDBLedgerRepository
 from nornikel_kg.adapters.legacy_doc import LegacyDocParser
-from nornikel_kg.ports.parser import ParsedBlock, ParsedDocument, ParserError
+from nornikel_kg.ports.parser import ParsedBlock, ParsedDocument
 from nornikel_kg.services.archive_expansion import expand_archives
 from nornikel_kg.services.ingestion_service import IngestionService
 
