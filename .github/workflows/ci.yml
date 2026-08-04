@@ -13,7 +13,7 @@ concurrency:
 jobs:
   backend:
     name: backend (python)
-    uses: NDDev-it-com/ci-workflows/.github/workflows/python-ci.yml@ca538d59aef41c1bb03c3669366c368128d5af88
+    uses: NDDev-it-com/ci-workflows/.github/workflows/python-ci.yml@b05016e27151e2d5b3f07e1d856fff50f635ab15
     with:
       runner: "self-hosted, Linux, X64, server-nddev-amsterdam"
       python_version: '3.12'
@@ -22,7 +22,7 @@ jobs:
 
   frontend:
     name: frontend (node)
-    uses: NDDev-it-com/ci-workflows/.github/workflows/node-ci.yml@ca538d59aef41c1bb03c3669366c368128d5af88
+    uses: NDDev-it-com/ci-workflows/.github/workflows/node-ci.yml@b05016e27151e2d5b3f07e1d856fff50f635ab15
     with:
       runner: "self-hosted, Linux, X64, server-nddev-amsterdam"
       working_directory: apps/web
@@ -30,12 +30,12 @@ jobs:
       test_command: 'npm run typecheck && npm run build'
 
   zizmor:
-    uses: NDDev-it-com/ci-workflows/.github/workflows/zizmor-no-sarif.yml@ca538d59aef41c1bb03c3669366c368128d5af88
+    uses: NDDev-it-com/ci-workflows/.github/workflows/zizmor-no-sarif.yml@b05016e27151e2d5b3f07e1d856fff50f635ab15
 
   secret-scan:
-    uses: NDDev-it-com/ci-workflows/.github/workflows/secret-scan.yml@ca538d59aef41c1bb03c3669366c368128d5af88
+    uses: NDDev-it-com/ci-workflows/.github/workflows/secret-scan.yml@b05016e27151e2d5b3f07e1d856fff50f635ab15
 
   actionlint:
-    uses: NDDev-it-com/ci-workflows/.github/workflows/actionlint.yml@ca538d59aef41c1bb03c3669366c368128d5af88
+    uses: NDDev-it-com/ci-workflows/.github/workflows/actionlint.yml@b05016e27151e2d5b3f07e1d856fff50f635ab15
     with:
       runner: "self-hosted, Linux, X64, server-nddev-amsterdam"
