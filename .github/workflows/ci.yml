@@ -1,52 +1,41 @@
 name: CI
 
-# CI for hack-2026-nornikel-mvp (archived). Runs on the estate self-hosted
-# runner (server-nddev-amsterdam). The run_eval.py step is excluded — it
-# requires live LLM API keys and is slow; not relevant for an archived repo.
-
 on:
   pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:
-    runs-on: [self-hosted, Linux, X64, server-nddev-amsterdam]
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7.6.0
-        with:
-          enable-cache: true
-      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c  # v6.0.0
-        with:
-          python-version: "3.12"
-      - run: uv sync --group dev
-      - run: uv run ruff check .
-      - run: uv run mypy
-      - run: uv run pytest
+    name: backend (python)
+    uses: NDDev-it-com/ci-workflows/.github/workflows/python-ci.yml@c26c516559c01166a35b852c0d2a925cc1bd8db8
+    with:
+      runner: "self-hosted, Linux, X64, server-nddev-amsterdam"
+      python_version: '3.12'
+      install_command: 'uv sync --group dev'
+      test_command: 'uv run ruff check . && uv run mypy && uv run pytest'
 
   frontend:
-    runs-on: [self-hosted, Linux, X64, server-nddev-amsterdam]
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903  # v6.0.0
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
-      - run: npm ci --no-audit
-        working-directory: apps/web
-      - run: npm run typecheck
-        working-directory: apps/web
-      - run: npm run build
-        working-directory: apps/web
+    name: frontend (node)
+    uses: NDDev-it-com/ci-workflows/.github/workflows/node-ci.yml@c26c516559c01166a35b852c0d2a925cc1bd8db8
+    with:
+      runner: "self-hosted, Linux, X64, server-nddev-amsterdam"
+      working_directory: apps/web
+      install_command: 'npm ci --no-audit'
+      test_command: 'npm run typecheck && npm run build'
+
+  zizmor:
+    uses: NDDev-it-com/ci-workflows/.github/workflows/zizmor-no-sarif.yml@c26c516559c01166a35b852c0d2a925cc1bd8db8
+
+  secret-scan:
+    uses: NDDev-it-com/ci-workflows/.github/workflows/secret-scan.yml@c26c516559c01166a35b852c0d2a925cc1bd8db8
+
+  actionlint:
+    uses: NDDev-it-com/ci-workflows/.github/workflows/actionlint.yml@c26c516559c01166a35b852c0d2a925cc1bd8db8
+    with:
+      runner: "self-hosted, Linux, X64, server-nddev-amsterdam"
