@@ -13,7 +13,7 @@ concurrency:
 jobs:
   backend:
     name: backend (python)
-    uses: NDDev-Technocracy-OpenNetwork/ci-workflows/.github/workflows/python-ci.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
+    uses: NDDev-Technocracy-Archive/ci-workflows-20261014/.github/workflows/python-ci.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
     with:
       uv_version: "0.12.23"
       runner: ubuntu-latest
@@ -23,7 +23,7 @@ jobs:
 
   frontend:
     name: frontend (node)
-    uses: NDDev-Technocracy-OpenNetwork/ci-workflows/.github/workflows/node-ci.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
+    uses: NDDev-Technocracy-Archive/ci-workflows-20261014/.github/workflows/node-ci.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
     with:
       package_manager: npm
       node_version: "24.21.0"
@@ -34,12 +34,12 @@ jobs:
       test_command: 'npm run typecheck && npm run build'
 
   zizmor:
-    uses: NDDev-Technocracy-OpenNetwork/ci-workflows/.github/workflows/zizmor-no-sarif.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
+    uses: NDDev-Technocracy-Archive/ci-workflows-20261014/.github/workflows/zizmor-no-sarif.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
 
   secret-scan:
-    uses: NDDev-Technocracy-OpenNetwork/ci-workflows/.github/workflows/secret-scan.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
+    uses: NDDev-Technocracy-Archive/ci-workflows-20261014/.github/workflows/secret-scan.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
 
   actionlint:
-    uses: NDDev-Technocracy-OpenNetwork/ci-workflows/.github/workflows/actionlint.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
+    uses: NDDev-Technocracy-Archive/ci-workflows-20261014/.github/workflows/actionlint.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
     with:
       runner: ubuntu-latest
