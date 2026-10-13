@@ -13,29 +13,33 @@ concurrency:
 jobs:
   backend:
     name: backend (python)
-    uses: NDDev-it-com/ci-workflows/.github/workflows/python-ci.yml@b05016e27151e2d5b3f07e1d856fff50f635ab15
+    uses: NDDev-Technocracy-OpenNetwork/ci-workflows/.github/workflows/python-ci.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
     with:
-      runner: "self-hosted, Linux, X64, server-nddev-amsterdam"
+      uv_version: "0.12.23"
+      runner: ubuntu-latest
       python_version: '3.12'
       install_command: 'uv sync --group dev'
       test_command: 'uv run ruff check . && uv run mypy && uv run pytest'
 
   frontend:
     name: frontend (node)
-    uses: NDDev-it-com/ci-workflows/.github/workflows/node-ci.yml@b05016e27151e2d5b3f07e1d856fff50f635ab15
+    uses: NDDev-Technocracy-OpenNetwork/ci-workflows/.github/workflows/node-ci.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
     with:
-      runner: "self-hosted, Linux, X64, server-nddev-amsterdam"
+      package_manager: npm
+      node_version: "24.21.0"
+      npm_version: "11.19.0"
+      runner: ubuntu-latest
       working_directory: apps/web
       install_command: 'npm ci --no-audit'
       test_command: 'npm run typecheck && npm run build'
 
   zizmor:
-    uses: NDDev-it-com/ci-workflows/.github/workflows/zizmor-no-sarif.yml@b05016e27151e2d5b3f07e1d856fff50f635ab15
+    uses: NDDev-Technocracy-OpenNetwork/ci-workflows/.github/workflows/zizmor-no-sarif.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
 
   secret-scan:
-    uses: NDDev-it-com/ci-workflows/.github/workflows/secret-scan.yml@b05016e27151e2d5b3f07e1d856fff50f635ab15
+    uses: NDDev-Technocracy-OpenNetwork/ci-workflows/.github/workflows/secret-scan.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
 
   actionlint:
-    uses: NDDev-it-com/ci-workflows/.github/workflows/actionlint.yml@b05016e27151e2d5b3f07e1d856fff50f635ab15
+    uses: NDDev-Technocracy-OpenNetwork/ci-workflows/.github/workflows/actionlint.yml@93eeb2a65e98a29e9dbff7909f67c6419abff046
     with:
-      runner: "self-hosted, Linux, X64, server-nddev-amsterdam"
+      runner: ubuntu-latest

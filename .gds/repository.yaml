@@ -1,37 +1,45 @@
 schema_version: 1
 repository:
-  id: "repo_01KYVP8HBJXN8E6W2ZAY1YMN2M"
-  display_name: "hack-2026-nornikel-mvp"
+  id: repo_01KYVP8HBJXN8E6W2ZAY1YMN2M
+  display_name: hack-2026-nornickel-mvp
   roles:
-    - "project"
-  lifecycle: "archived"
+  - project
+  lifecycle: active
 provider:
-  type: "github"
-  installation: "installation:github-personal"
+  type: github
+  installation: installation:github-nddev-technocracy-opennetwork
   repository_id: 1282788948
-  owner: "rldyourmnd"
-  name: "hack-2026-nornikel-mvp"
+  owner: NDDev-Technocracy-OpenNetwork
+  name: hack-2026-nornickel-mvp
+  aliases:
+  - owner: rldyourmnd
+    name: hack-2026-nornikel-mvp
+  - owner: NDDev-Technocracy-Archive
+    name: hack-2026-nornickel-mvp
 classification:
   portfolios:
-    - "portfolio:archived-projects"
-  visibility_contract: "private"
-  data_classification: "private"
+  - portfolio:nddev-technocracy-opennetwork
+  visibility_contract: public
+  data_classification: public
 policy:
   profiles:
-    - "repository-default"
-    - "personal-default"
-  rollout_ring: "standard"
+  - repository-default
+  - organization-default
+  rollout_ring: standard
 git:
-  default_branch: "main"
-  integration: "pull-request"
-  branch_model: "task-branches"
-  handoff_pr: "never"
-  cleanup: "manual"
+  default_branch: main
+  integration: pull-request
+  branch_model: task-branches
+  handoff_pr: never
+  cleanup: manual
 agent:
-  context_profile: "project-default"
+  context_profile: project-default
   generated_agents: false
   serena:
     enabled: false
     provenance_required: false
 release:
-  mode: "none"
+  mode: none
+product:
+  purpose: 'Nornickel AI Hack 2026: early materials knowledge-graph MVP with evidence-backed
+    answers. FastAPI + React + DuckDB.'
