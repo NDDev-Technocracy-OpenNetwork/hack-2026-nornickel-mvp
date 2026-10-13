@@ -2,15 +2,14 @@
 schema_version: 1
 
 bundle:
-  version: "0.4.0-dev"
+  version: "0.9.7-dev"
   release_sequence: 0
-  channel: "development"
-  source_tree_digest: "sha256:9875a1ff737c3fb6740d1a1aadc1ab9f4cd31e0f7dbc561f47c784b99676da33"
-  digest: "sha256:a0793e7ed559f99298acd005a8823f39e3a31ce062ca3e276737d64060e41d0e"
+  source_tree_digest: "sha256:55fd8cbc5bff26a6c719ed604c7e8124b88d5d584e73951ce0ad617eae831ead"
+  digest: "sha256:3d95d9514fbf5681ceadd059e8e0614b3a54c70f00801608e5fec7706efa1af7"
 
 projection:
-  input_digest: "sha256:81b904d5e9ac7279e994d8a7a946089f24d606a6ac0886fe18d205ce71dc7b13"
-  output_digest: "sha256:aa42d60ad8e10a9026f38a3af5233df1986f11e058a09d71e095a8d0714bd431"
+  input_digest: "sha256:4b498fb1ace0c476179226b8fec95ff55455c0d98d83ddc21d9eac4bd362cbfe"
+  output_digest: "sha256:51c48ccac6e62bf43dc97f96d861211e9d154715abb91e321b7caf913f25f7ed"
   files:
     - path: ".gds/compiled-policy.json"
-      digest: "sha256:d016bd7e1ed43b5494f88086e089061b13027036e3dbeb600cea0ada3037305c"
+      digest: "sha256:2bfe178f9b1f56150e8a23d42a8b13d8a453246e90af00ca0e4db5fcde2cf0c4"

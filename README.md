@@ -1,8 +1,17 @@
-# Nornikel Materials KG Search
+<!-- nddev-public-hackathon -->
+# hack-2026-nornickel-mvp
 
-> **DEPRECATED.** This repository is archived and no longer maintained.
-> It is kept read-only for reference; its GDS anchor records
-> `lifecycle: archived` under `portfolio:archived-projects`.
+Nornickel AI Hack 2026: early materials knowledge-graph MVP with evidence-backed answers. FastAPI + React + DuckDB.
+
+[NDDev OpenNetwork](https://github.com/NDDev-Technocracy-OpenNetwork) · [Repository](https://github.com/NDDev-Technocracy-OpenNetwork/hack-2026-nornickel-mvp)
+
+This repository is a hackathon prototype or supporting tool. Follow the project-specific setup below; cloud integrations require your own configuration and credentials.
+
+---
+
+## Nornikel Materials KG Search
+
+
 
 Evidence-first materials research workbench for the Nornikel hackathon.
 
